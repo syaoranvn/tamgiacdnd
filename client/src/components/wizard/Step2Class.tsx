@@ -1,0 +1,664 @@
+import { useState, useEffect, useMemo } from "react";
+import type { Class, Subclass, Feat } from "../../types";
+import { parseText, parseItemName } from "../../utils/textParser";
+import Tooltip from "../Tooltip";
+import TextWithTooltips from "../TextWithTooltips";
+import TooltipContent from "../TooltipContent";
+import { apiUrl } from "../../config/api";
+
+// Component to load and display feature tooltip
+const FeatureTooltip = ({ featureName, level }: { featureName: string; level: string }) => {
+  const [featureData, setFeatureData] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+
+  const loadFeature = async () => {
+    if (featureData || loading) return;
+    setLoading(true);
+    try {
+      const response = await fetch(
+        apiUrl(`api/data/lookup/optionalfeature/${encodeURIComponent(featureName)}`)
+      );
+      if (response.ok) {
+        const data = await response.json();
+        setFeatureData(data);
+      }
+    } catch (error) {
+      console.error("Error loading feature:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Tooltip
+      content={
+        <TooltipContent
+          type="optionalfeature"
+          name={featureName}
+          data={featureData}
+          loading={loading}
+        />
+      }
+    >
+      <div
+        className="flex items-center gap-2 cursor-help"
+        onMouseEnter={loadFeature}
+      >
+        <span className="font-medium text-amber-700">Lv {level}:</span>
+        <span className="text-amber-700 underline decoration-dotted underline-offset-2 hover:text-amber-800">
+          {featureName}
+        </span>
+      </div>
+    </Tooltip>
+  );
+};
+
+interface Step2ClassProps {
+  classes: Class[];
+  selectedClass?: string;
+  selectedLevel?: number;
+  selectedSubclass?: string;
+  selectedFeats?: string[];
+  classSkillChoices?: string[];
+  onSelectClass: (className: string) => void;
+  onSelectLevel: (level: number) => void;
+  onSelectSubclass: (subclass: string) => void;
+  onSelectFeats: (feats: string[]) => void;
+  onSelectSkillChoices?: (choices: string[]) => void;
+}
+
+const getASILevels = (classFeatures: any[]): number[] => {
+  if (!classFeatures) return [];
+  const asiLevels: number[] = [];
+  classFeatures.forEach((feature) => {
+    if (
+      typeof feature === "string" &&
+      feature.includes("Ability Score Improvement")
+    ) {
+      const match = feature.match(/\|\|(\d+)$/);
+      if (match) {
+        const level = parseInt(match[1]);
+        if (level >= 4) asiLevels.push(level);
+      }
+    }
+  });
+  return asiLevels.sort((a, b) => a - b);
+};
+
+interface Skill {
+  name: string;
+  ability?: string | string[];
+  [key: string]: any;
+}
+
+export default function Step2Class({
+  classes,
+  selectedClass,
+  selectedLevel = 1,
+  selectedSubclass,
+  selectedFeats = [],
+  classSkillChoices = [],
+  onSelectClass,
+  onSelectLevel,
+  onSelectSubclass,
+  onSelectFeats,
+  onSelectSkillChoices,
+}: Step2ClassProps) {
+  const [selectedClassData, setSelectedClassData] = useState<Class | null>(null);
+  const [subclasses, setSubclasses] = useState<Subclass[]>([]);
+  const [selectedSubclassData, setSelectedSubclassData] = useState<Subclass | null>(null);
+  const [feats, setFeats] = useState<Feat[]>([]);
+  const [showClassDetails, setShowClassDetails] = useState(false);
+  const [showSubclassDetails, setShowSubclassDetails] = useState(false);
+  const [showFeatDetails, setShowFeatDetails] = useState<string | null>(null);
+  const [loadingSubclasses, setLoadingSubclasses] = useState(false);
+  const [loadingFeats, setLoadingFeats] = useState(false);
+  const [allSkills, setAllSkills] = useState<Skill[]>([]);
+  const [loadingSkills, setLoadingSkills] = useState(false);
+
+  useEffect(() => {
+    if (selectedClass) {
+      const classData = classes.find((c) => c.name === selectedClass);
+      setSelectedClassData(classData || null);
+      if (selectedLevel >= 3) {
+        loadSubclasses(selectedClass);
+      } else {
+        setSubclasses([]);
+        setSelectedSubclassData(null);
+      }
+      if (selectedLevel >= 4) {
+        loadFeats();
+      }
+    } else {
+      setSelectedClassData(null);
+      setSubclasses([]);
+      setSelectedSubclassData(null);
+    }
+  }, [selectedClass, classes, selectedLevel]);
+
+  useEffect(() => {
+    if (selectedSubclass && subclasses.length > 0) {
+      const subclass = subclasses.find((s) => s.name === selectedSubclass);
+      setSelectedSubclassData(subclass || null);
+    } else {
+      setSelectedSubclassData(null);
+    }
+  }, [selectedSubclass, subclasses]);
+
+  // Load skills if class has skill choices
+  useEffect(() => {
+    if (selectedClassData?.startingProficiencies?.skills) {
+      const hasSkillChoice = selectedClassData.startingProficiencies.skills.some(
+        (skill: any) => skill.choose
+      );
+      if (hasSkillChoice && allSkills.length === 0) {
+        loadSkills();
+      }
+    } else {
+      setAllSkills([]);
+    }
+  }, [selectedClassData]);
+
+  const loadSkills = async () => {
+    setLoadingSkills(true);
+    try {
+      const response = await fetch(apiUrl("api/data/skills"));
+      if (response.ok) {
+        const data = await response.json();
+        setAllSkills(data.skills || []);
+      }
+    } catch (error) {
+      console.error("Error loading skills:", error);
+    } finally {
+      setLoadingSkills(false);
+    }
+  };
+
+  // Get skill choice info from class
+  const getSkillChoice = () => {
+    if (!selectedClassData?.startingProficiencies?.skills) return null;
+    
+    for (const skillChoice of selectedClassData.startingProficiencies.skills) {
+      if (skillChoice.choose && skillChoice.choose.from && skillChoice.choose.count) {
+        return {
+          count: skillChoice.choose.count,
+          from: skillChoice.choose.from.map((s: string) => s.toLowerCase()),
+        };
+      }
+    }
+    return null;
+  };
+
+  const skillChoice = getSkillChoice();
+
+  const handleSkillChoiceChange = (index: number, value: string) => {
+    if (!onSelectSkillChoices || !skillChoice) return;
+    
+    const newChoices = [...classSkillChoices];
+    newChoices[index] = value;
+    
+    // Ensure unique selections
+    const uniqueChoices = Array.from(new Set(newChoices.filter(Boolean)));
+    if (uniqueChoices.length <= skillChoice.count) {
+      // Pad with empty strings to maintain array length
+      while (uniqueChoices.length < skillChoice.count) {
+        uniqueChoices.push("");
+      }
+      onSelectSkillChoices(uniqueChoices);
+    }
+  };
+
+  const loadSubclasses = async (className: string) => {
+    try {
+      setLoadingSubclasses(true);
+      const response = await fetch(
+        apiUrl(`api/data/classes/${className}/subclasses`)
+      );
+      if (response.ok) {
+        const data = await response.json();
+        setSubclasses(data);
+        if (selectedSubclass && !data.find((s: Subclass) => s.name === selectedSubclass)) {
+          onSelectSubclass("");
+        }
+      } else {
+        setSubclasses([]);
+      }
+    } catch (error) {
+      console.error("Error loading subclasses:", error);
+      setSubclasses([]);
+    } finally {
+      setLoadingSubclasses(false);
+    }
+  };
+
+  const loadFeats = async () => {
+    try {
+      setLoadingFeats(true);
+      const response = await fetch(apiUrl("api/data/feats/phb"));
+      if (response.ok) {
+        const data = await response.json();
+        setFeats(data);
+      }
+    } catch (error) {
+      console.error("Error loading feats:", error);
+    } finally {
+      setLoadingFeats(false);
+    }
+  };
+
+  const asiLevels = useMemo(() => {
+    if (!selectedClassData?.classFeatures) return [];
+    return getASILevels(selectedClassData.classFeatures);
+  }, [selectedClassData]);
+
+  const availableASILevels = useMemo(() => {
+    return asiLevels.filter((level) => selectedLevel >= level);
+  }, [asiLevels, selectedLevel]);
+
+  const handleFeatToggle = (featName: string) => {
+    if (selectedFeats.includes(featName)) {
+      onSelectFeats(selectedFeats.filter((f) => f !== featName));
+    } else {
+      // Check if we can add more feats (one per ASI level)
+      if (selectedFeats.length < availableASILevels.length) {
+        onSelectFeats([...selectedFeats, featName]);
+      }
+    }
+  };
+
+
+  const formatEntry = (entry: any): string => {
+    if (typeof entry === "string") {
+      return parseText(entry);
+    }
+    if (entry && typeof entry === "object") {
+      if (Array.isArray(entry.entries)) {
+        return entry.entries.map((e: any) => formatEntry(e)).join(" ");
+      }
+      if (entry.name) return entry.name;
+    }
+    return "";
+  };
+
+  const getAllEntries = (entries: any[]): any[] => {
+    if (!entries) return [];
+    return entries.filter((e) => e && typeof e === "object" && e.name);
+  };
+
+  const getClassDescription = (classData: Class): any[] => {
+    const descriptions: any[] = [];
+    
+    // Try to get description from various possible fields
+    if (classData.entries && Array.isArray(classData.entries)) {
+      classData.entries.forEach((entry: any) => {
+        if (typeof entry === "string") {
+          descriptions.push({ type: "text", content: formatEntry(entry) });
+        } else if (entry && typeof entry === "object" && entry.name) {
+          descriptions.push({
+            type: "feature",
+            name: entry.name,
+            content: formatEntry(entry),
+          });
+        }
+      });
+    }
+    
+    // If no entries, provide basic info
+    if (descriptions.length === 0) {
+      descriptions.push({
+        type: "text",
+        content: `${classData.name} là một lớp trong D&D 5e.`,
+      });
+      if (classData.hd) {
+        descriptions.push({
+          type: "text",
+          content: `Hit Die: d${classData.hd.faces}`,
+        });
+      }
+      if (classData.spellcastingAbility) {
+        descriptions.push({
+          type: "text",
+          content: `Khả năng phép thuật: ${classData.spellcastingAbility.toUpperCase()}`,
+        });
+      }
+    }
+    
+    return descriptions;
+  };
+
+  const formatClassFeature = (feature: any): { name: string; level: string } => {
+    if (typeof feature === "string") {
+      const parts = feature.split("|");
+      const name = parts[0] || "Unknown";
+      const levelMatch = feature.match(/\|\|(\d+)/);
+      const level = levelMatch ? levelMatch[1] : "";
+      return { name, level };
+    } else if (feature && typeof feature === "object" && feature.classFeature) {
+      const parts = feature.classFeature.split("|");
+      const name = parts[0] || "Unknown";
+      const levelMatch = feature.classFeature.match(/\|\|(\d+)/);
+      const level = levelMatch ? levelMatch[1] : "";
+      return { name, level };
+    }
+    return { name: "Unknown", level: "" };
+  };
+
+  return (
+    <div>
+      <h2 className="mb-4 font-display text-2xl text-ink">Bước 2: Chọn lớp</h2>
+      <p className="mb-6 text-slate-600">
+        Lớp xác định nghề nghiệp và khả năng đặc biệt của nhân vật. Mỗi lớp có các
+        tính năng riêng, thành thạo vũ khí/giáp, và kỹ năng.
+      </p>
+
+      <div className="space-y-6">
+        <div>
+          <label className="mb-2 block text-sm font-medium text-slate-700">
+            Chọn lớp *
+          </label>
+          <select
+            value={selectedClass || ""}
+            onChange={(e) => {
+              onSelectClass(e.target.value);
+              onSelectSubclass("");
+              onSelectFeats([]);
+            }}
+            className="w-full rounded-2xl border border-amber-100 bg-white px-4 py-3 text-ink focus:border-amber-400 focus:outline-none"
+            required
+          >
+            <option value="">-- Chọn lớp --</option>
+            {classes.map((cls) => (
+              <option key={cls.name} value={cls.name}>
+                {cls.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="mb-2 block text-sm font-medium text-slate-700">
+            Cấp độ (1-20) *
+          </label>
+          <input
+            type="range"
+            min={1}
+            max={20}
+            value={selectedLevel}
+            onChange={(e) => onSelectLevel(parseInt(e.target.value))}
+            className="w-full accent-amber-500"
+          />
+          <div className="mt-2 flex items-center justify-between text-sm text-slate-600">
+            <span>Cấp độ {selectedLevel}</span>
+            <span>Hệ số thành thạo: +{Math.floor((selectedLevel - 1) / 4) + 2}</span>
+          </div>
+        </div>
+
+        {selectedClassData && (
+          <div className="rounded-2xl border border-amber-100 bg-amber-50/30 p-6">
+            <div className="mb-4 flex items-start justify-between">
+              <h3 className="font-display text-xl text-ink">
+                {selectedClassData.name}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowClassDetails(!showClassDetails)}
+                className="text-sm text-amber-700 underline-offset-2 hover:underline"
+              >
+                {showClassDetails ? "Ẩn chi tiết" : "Xem chi tiết"}
+              </button>
+            </div>
+
+            <div className="space-y-3 text-sm">
+              <div>
+                <span className="font-medium text-slate-700">Hit Die:</span> d
+                {selectedClassData.hd?.faces || 8}
+              </div>
+              <div>
+                <span className="font-medium text-slate-700">Thành thạo Saving Throw:</span>{" "}
+                {selectedClassData.proficiency
+                  ?.map((p) => p.toUpperCase())
+                  .join(", ") || "N/A"}
+              </div>
+              {selectedClassData.startingProficiencies?.armor && (
+                <div>
+                  <span className="font-medium text-slate-700">Thành thạo Giáp:</span>{" "}
+                  {selectedClassData.startingProficiencies.armor.join(", ")}
+                </div>
+              )}
+              {selectedClassData.startingProficiencies?.weapons && (
+                <div>
+                  <span className="font-medium text-slate-700">Thành thạo Vũ khí:</span>{" "}
+                  <span>
+                    {selectedClassData.startingProficiencies.weapons
+                      .map(parseItemName)
+                      .join(", ")}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {showClassDetails && (
+              <div className="mt-6 space-y-2 border-t border-amber-200 pt-4 text-sm text-slate-600">
+                {selectedClassData.entries && getAllEntries(selectedClassData.entries).length > 0 ? (
+                  getAllEntries(selectedClassData.entries)
+                    .slice(0, 5)
+                    .map((entry: any, idx: number) => (
+                      <div key={idx} className="rounded-lg bg-white/50 p-3">
+                        <div className="font-medium text-slate-700 mb-1">{entry.name}</div>
+                        <div className="text-slate-600">
+                          {Array.isArray(entry.entries)
+                            ? entry.entries
+                                .filter((e: any) => typeof e === "string")
+                                .slice(0, 2)
+                                .map((e: string, i: number) => (
+                                  <div key={i}>
+                                    <TextWithTooltips text={e} />
+                                  </div>
+                                ))
+                            : <TextWithTooltips text={formatEntry(entry)} />}
+                        </div>
+                      </div>
+                    ))
+                ) : (
+                  <div className="space-y-2">
+                    {getClassDescription(selectedClassData).map((desc, idx) => (
+                      <div key={idx} className="rounded-lg bg-white/50 p-3 text-slate-600">
+                        {desc.type === "feature" ? (
+                          <>
+                            <div className="font-medium text-slate-700 mb-1">{desc.name}</div>
+                            <div>{desc.content}</div>
+                          </>
+                        ) : (
+                          <div>{desc.content}</div>
+                        )}
+                      </div>
+                    ))}
+                    {selectedClassData.classFeatures && selectedClassData.classFeatures.length > 0 && (
+                      <div className="mt-3 rounded-lg bg-white/50 p-3">
+                        <div className="font-medium text-slate-700 mb-2">
+                          Class Features (theo level):
+                        </div>
+                        <div className="space-y-1 text-xs text-slate-600">
+                          {selectedClassData.classFeatures
+                            .slice(0, 15)
+                            .map((feature: any, idx: number) => {
+                              const { name, level } = formatClassFeature(feature);
+                              const cleanName = formatEntry(name);
+                              // Create a FeatureTooltip component that loads data on hover
+                              return (
+                                <FeatureTooltip
+                                  key={idx}
+                                  featureName={cleanName}
+                                  level={level}
+                                />
+                              );
+                            })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {selectedClassData && selectedLevel >= 3 && subclasses.length > 0 && (
+          <div>
+            <label className="mb-2 block text-sm font-medium text-slate-700">
+              Chọn {selectedClassData.subclassTitle || "Subclass"} *
+            </label>
+            {loadingSubclasses ? (
+              <div className="text-sm text-slate-500">Đang tải...</div>
+            ) : (
+              <select
+                value={selectedSubclass || ""}
+                onChange={(e) => onSelectSubclass(e.target.value)}
+                className="w-full rounded-2xl border border-amber-100 bg-white px-4 py-3 text-ink focus:border-amber-400 focus:outline-none"
+              >
+                <option value="">-- Chọn {selectedClassData.subclassTitle || "Subclass"} --</option>
+                {subclasses.map((subclass) => (
+                  <option key={subclass.name} value={subclass.name}>
+                    {subclass.name}
+                  </option>
+                ))}
+              </select>
+            )}
+
+            {selectedSubclassData && (
+              <div className="mt-4 rounded-2xl border border-amber-100 bg-amber-50/30 p-4">
+                <div className="mb-2 flex items-start justify-between">
+                  <h4 className="font-medium text-slate-700">
+                    {selectedSubclassData.name}
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={() => setShowSubclassDetails(!showSubclassDetails)}
+                    className="text-xs text-amber-700 underline-offset-2 hover:underline"
+                  >
+                    {showSubclassDetails ? "Ẩn" : "Chi tiết"}
+                  </button>
+                </div>
+                {showSubclassDetails && selectedSubclassData.entries && (
+                  <div className="mt-3 space-y-2 border-t border-amber-200 pt-3 text-sm text-slate-600">
+                    {getAllEntries(selectedSubclassData.entries)
+                      .slice(0, 3)
+                      .map((entry: any, idx: number) => (
+                        <div key={idx} className="rounded-lg bg-white/50 p-2">
+                          <div className="font-medium text-slate-700 mb-1">
+                            {entry.name}
+                          </div>
+                            <div className="text-slate-600">
+                              {Array.isArray(entry.entries)
+                                ? entry.entries
+                                    .filter((e: any) => typeof e === "string")
+                                    .slice(0, 1)
+                                    .map((e: string, i: number) => (
+                                      <div key={i}>
+                                        <TextWithTooltips text={e} />
+                                      </div>
+                                    ))
+                                : <TextWithTooltips text={formatEntry(entry)} />}
+                            </div>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {selectedClassData &&
+          selectedLevel >= 4 &&
+          availableASILevels.length > 0 &&
+          (loadingFeats ? (
+            <div className="text-sm text-slate-500">Đang tải feats...</div>
+          ) : (
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                Chọn Feat hoặc Tăng chỉ số (Ability Score Improvement)
+              </label>
+              <p className="mb-3 text-xs text-slate-500">
+                Bạn có {availableASILevels.length} lựa chọn ở cấp độ{" "}
+                {availableASILevels.join(", ")}. Mỗi lựa chọn: chọn 1 Feat HOẶC tăng 2
+                chỉ số (hoặc 1 chỉ số +2).
+              </p>
+              <div className="space-y-2 max-h-64 overflow-y-auto rounded-2xl border border-amber-100 bg-white p-4">
+                {feats.map((feat) => {
+                  const isSelected = selectedFeats.includes(feat.name);
+                  const canSelect =
+                    selectedFeats.length < availableASILevels.length;
+                  return (
+                    <div
+                      key={feat.name}
+                      className={`flex items-start gap-3 rounded-lg border p-3 transition-all ${
+                        isSelected
+                          ? "border-amber-500 bg-amber-50"
+                          : canSelect
+                          ? "border-slate-200 hover:border-amber-300"
+                          : "border-slate-200 opacity-50"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => handleFeatToggle(feat.name)}
+                        disabled={!isSelected && !canSelect}
+                        className="mt-1"
+                      />
+                      <div className="flex-1">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <div className="font-medium text-slate-700">{feat.name}</div>
+                            {feat.ability && feat.ability.length > 0 && (
+                              <div className="mt-1 text-xs text-slate-500">
+                                Tăng:{" "}
+                                {Object.entries(feat.ability[0])
+                                  .filter(([_, v]) => typeof v === "number" && v > 0)
+                                  .map(([k, v]) => `${k.toUpperCase()} +${v}`)
+                                  .join(", ")}
+                              </div>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setShowFeatDetails(
+                                showFeatDetails === feat.name ? null : feat.name
+                              )
+                            }
+                            className="text-xs text-amber-700 underline-offset-2 hover:underline"
+                          >
+                            {showFeatDetails === feat.name ? "Ẩn" : "Chi tiết"}
+                          </button>
+                        </div>
+                        {showFeatDetails === feat.name && feat.entries && (
+                          <div className="mt-2 space-y-1 border-t border-amber-200 pt-2 text-xs text-slate-600">
+                            {feat.entries
+                              .filter((e: any) => typeof e === "string")
+                              .slice(0, 2)
+                              .map((e: string, i: number) => (
+                                <div key={i}>
+                                  <TextWithTooltips text={e} />
+                                </div>
+                              ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {selectedFeats.length > 0 && (
+                <div className="mt-3 text-sm text-slate-600">
+                  <strong>Đã chọn:</strong> {selectedFeats.join(", ")} (
+                  {selectedFeats.length}/{availableASILevels.length})
+                </div>
+              )}
+            </div>
+          ))}
+      </div>
+    </div>
+  );
+}
