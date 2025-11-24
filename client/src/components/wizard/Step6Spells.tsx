@@ -6,7 +6,7 @@ import TooltipContent from "../TooltipContent";
 import ConfirmDialog from "../ConfirmDialog";
 import { apiUrl } from "../../config/api";
 
-interface Step6SpellsProps {
+interface Step9SpellsProps {
   character: Partial<Character>;
   onUpdate: (updates: Partial<Character>) => void;
 }
@@ -23,7 +23,7 @@ interface Spell {
   [key: string]: any;
 }
 
-export default function Step6Spells({
+export default function Step9Spells({
   character,
   onUpdate,
 }: Step6SpellsProps) {

@@ -1,0 +1,245 @@
+[
+  {
+    "id": "4b595350-1141-46b2-a76b-550341472fcf",
+    "name": "Demo Sorcerer 145",
+    "race": "Gnome",
+    "subrace": "Forest",
+    "className": "Sorcerer",
+    "subclass": "Draconic Bloodline",
+    "background": "Hermit",
+    "alignment": "CG",
+    "level": 6,
+    "experiencePoints": 14000,
+    "abilityScores": {
+      "str": 10,
+      "dex": 14,
+      "con": 16,
+      "int": 12,
+      "wis": 12,
+      "cha": 18
+    },
+    "proficiencies": [
+      "Daggers",
+      "Darts",
+      "Slings",
+      "Quarterstaffs",
+      "Light crossbows",
+      "Arcana",
+      "Deception",
+      "Insight",
+      "Religion",
+      "Survival",
+      "herbalism kit",
+      "Gnomish"
+    ],
+    "equipment": [
+      "light crossbow",
+      "crossbow bolts (20)",
+      "dagger (2)",
+      "explorer's pack",
+      "component pouch",
+      "scholar's pack",
+      "spellbook",
+      "herbalism kit",
+      "staff"
+    ],
+    "feats": [
+      "Alert"
+    ],
+    "spells": {
+      "cantrips": [
+        "Fire Bolt",
+        "Acid Splash",
+        "Blade Ward",
+        "Chill Touch",
+        "Friends"
+      ],
+      "level1": [
+        "Burning Hands",
+        "Charm Person",
+        "Chromatic Orb"
+      ],
+      "level2": [
+        "Alter Self",
+        "Blindness/Deafness"
+      ],
+      "level3": [
+        "Blink",
+        "Clairvoyance"
+      ]
+    },
+    "ideals": "Kiến thức là chìa khóa mở ra vũ trụ.",
+    "bonds": "Bảo vệ bộ tộc gnome của mình.",
+    "flaws": "Tò mò quá mức.",
+    "notes": "Nhân vật mẫu để test export PDF.",
+    "raceLanguageChoices": [
+      "Common",
+      "Gnomish"
+    ],
+    "calculatedStats": {
+      "ac": 14,
+      "initiative": 2,
+      "speed": 25,
+      "passivePerception": 12,
+      "proficiencyBonus": 3,
+      "abilityModifiers": {
+        "str": 0,
+        "dex": 2,
+        "con": 3,
+        "int": 1,
+        "wis": 1,
+        "cha": 4
+      },
+      "savingThrows": {
+        "str": {
+          "proficient": false,
+          "modifier": 0
+        },
+        "dex": {
+          "proficient": false,
+          "modifier": 2
+        },
+        "con": {
+          "proficient": true,
+          "modifier": 6
+        },
+        "int": {
+          "proficient": false,
+          "modifier": 1
+        },
+        "wis": {
+          "proficient": false,
+          "modifier": 1
+        },
+        "cha": {
+          "proficient": true,
+          "modifier": 7
+        }
+      },
+      "hp": 36,
+      "hpCurrent": 36,
+      "hpMax": 36,
+      "maxHp": 36,
+      "hitDie": "d6",
+      "hitDice": "6d6",
+      "skills": {
+        "Acrobatics": {
+          "proficient": false,
+          "modifier": 2
+        },
+        "Animal Handling": {
+          "proficient": false,
+          "modifier": 1
+        },
+        "Arcana": {
+          "proficient": true,
+          "modifier": 4
+        },
+        "Athletics": {
+          "proficient": false,
+          "modifier": 0
+        },
+        "Deception": {
+          "proficient": true,
+          "modifier": 7
+        },
+        "History": {
+          "proficient": false,
+          "modifier": 1
+        },
+        "Insight": {
+          "proficient": true,
+          "modifier": 4
+        },
+        "Intimidation": {
+          "proficient": false,
+          "modifier": 4
+        },
+        "Investigation": {
+          "proficient": false,
+          "modifier": 1
+        },
+        "Medicine": {
+          "proficient": false,
+          "modifier": 1
+        },
+        "Nature": {
+          "proficient": false,
+          "modifier": 1
+        },
+        "Perception": {
+          "proficient": true,
+          "modifier": 4
+        },
+        "Performance": {
+          "proficient": false,
+          "modifier": 4
+        },
+        "Persuasion": {
+          "proficient": false,
+          "modifier": 4
+        },
+        "Religion": {
+          "proficient": true,
+          "modifier": 4
+        },
+        "Sleight of Hand": {
+          "proficient": false,
+          "modifier": 2
+        },
+        "Stealth": {
+          "proficient": false,
+          "modifier": 2
+        },
+        "Survival": {
+          "proficient": true,
+          "modifier": 4
+        }
+      },
+      "expandedEquipment": [
+        "light crossbow",
+        "crossbow bolts (20)",
+        "dagger",
+        "dagger",
+        "explorer's pack",
+        "component pouch",
+        "scholar's pack",
+        "spellbook",
+        "herbalism kit",
+        "staff"
+      ],
+      "weapons": [
+        {
+          "name": "Light Crossbow",
+          "attackBonus": 7,
+          "damage": "1d8+4",
+          "damageType": "piercing"
+        },
+        {
+          "name": "Dagger",
+          "attackBonus": 6,
+          "damage": "1d4+4",
+          "damageType": "piercing"
+        }
+      ],
+      "spellSlots": {
+        "level1": {
+          "total": 4,
+          "used": 0
+        },
+        "level2": {
+          "total": 3,
+          "used": 0
+        },
+        "level3": {
+          "total": 3,
+          "used": 0
+        }
+      },
+      "spellSaveDC": 15,
+      "spellAttackBonus": 7,
+      "spellcastingAbility": "CHA"
+    },
+    "createdAt": "2025-11-24T09:10:47.805Z"
+  }
+]

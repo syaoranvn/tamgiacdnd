@@ -17,6 +17,7 @@ export default function CharacterSelector({
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [exportingId, setExportingId] = useState<string | null>(null);
+  const [creatingSample, setCreatingSample] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
     characterId: string;
@@ -81,6 +82,28 @@ export default function CharacterSelector({
 
   const handleDeleteCancel = () => {
     setConfirmDialog({ isOpen: false, characterId: "", characterName: "" });
+  };
+
+  const handleCreateSample = async () => {
+    try {
+      setCreatingSample(true);
+      setError(null);
+      const response = await fetch(apiUrl("api/characters/sample"), {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        throw new Error("Không thể tạo nhân vật mẫu");
+      }
+
+      await loadCharacters();
+    } catch (err) {
+      console.error("Error creating sample character:", err);
+      setError("Không thể tạo nhân vật mẫu. Vui lòng thử lại.");
+      setTimeout(() => setError(null), 5000);
+    } finally {
+      setCreatingSample(false);
+    }
   };
 
   const handleExportPDF = async (characterId: string, characterName: string) => {
@@ -257,7 +280,14 @@ export default function CharacterSelector({
           </div>
         )}
 
-        <div className="flex justify-center">
+        <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
+          <button
+            onClick={handleCreateSample}
+            disabled={creatingSample}
+            className="flex items-center justify-center rounded-2xl border border-amber-200 bg-white px-6 py-3 font-medium text-amber-700 shadow-sm transition-all hover:bg-amber-50 disabled:opacity-60"
+          >
+            {creatingSample ? "Đang tạo demo..." : "⚡ Tạo nhân vật demo"}
+          </button>
           <button
             onClick={onCreateNew}
             className="rounded-2xl bg-amber-600 px-8 py-4 font-display text-lg text-white shadow-lg transition-all hover:bg-amber-700 hover:shadow-xl"

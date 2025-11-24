@@ -7,7 +7,7 @@ import { TranslationProvider } from './contexts/TranslationContext.tsx'
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <TranslationProvider>
-      <App />
+    <App />
     </TranslationProvider>
   </StrictMode>,
 )

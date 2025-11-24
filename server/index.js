@@ -11,8 +11,66 @@ const PORT = process.env.PORT || 4000;
 app.use(cors());
 app.use(express.json());
 
-// In-memory storage
+// File paths for persistence
+const dataDir = path.join(__dirname, "..", "data");
+const charactersFilePath = path.join(dataDir, "characters.json");
+const sampleCharacterPath = path.join(dataDir, "sample-character.json");
+
+// In-memory storage (kept in sync with disk)
 const characters = [];
+
+const ensureDataDir = () => {
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+  }
+};
+
+const loadCharactersFromFile = () => {
+  try {
+    ensureDataDir();
+    if (!fs.existsSync(charactersFilePath)) {
+      console.log("[Characters] Không tìm thấy characters.json, bắt đầu với danh sách rỗng");
+      return;
+    }
+    const raw = fs.readFileSync(charactersFilePath, "utf8");
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      characters.splice(0, characters.length, ...parsed);
+      console.log(`[Characters] Đã load ${characters.length} nhân vật từ file`);
+    } else {
+      console.warn("[Characters] File characters.json không đúng định dạng array");
+    }
+  } catch (error) {
+    console.error("[Characters] Lỗi load characters.json:", error);
+  }
+};
+
+const saveCharactersToFile = () => {
+  try {
+    ensureDataDir();
+    fs.writeFileSync(charactersFilePath, JSON.stringify(characters, null, 2), "utf8");
+    console.log(`[Characters] Đã lưu ${characters.length} nhân vật vào file`);
+  } catch (error) {
+    console.error("[Characters] Lỗi lưu characters.json:", error);
+  }
+};
+
+const loadSampleCharacter = () => {
+  try {
+    if (!fs.existsSync(sampleCharacterPath)) {
+      console.warn("[Characters] sample-character.json không tồn tại");
+      return null;
+    }
+    const raw = fs.readFileSync(sampleCharacterPath, "utf8");
+    return JSON.parse(raw);
+  } catch (error) {
+    console.error("[Characters] Lỗi đọc sample-character.json:", error);
+    return null;
+  }
+};
+
+// Load persisted characters on startup
+loadCharactersFromFile();
 
 // Data cache - store all loaded JSON files in memory
 const dataCache = {};
@@ -57,6 +115,8 @@ const preloadData = () => {
     "variantrules.json",
     "actions.json", // Add actions.json for combat actions
     "book/book-phb.json", // Add book-phb.json for spell lists
+    "optionalfeatures.json", // Add optionalfeatures.json for optional feature lookups
+    "senses.json", // Add senses.json for sense lookups (Darkvision, etc.)
   ];
   
   const classFiles = [
@@ -342,7 +402,27 @@ app.post("/api/characters", (req, res) => {
   };
 
   characters.push(character);
+  saveCharactersToFile();
   res.status(201).json(character);
+});
+
+// Quick create from sample template (for fast testing)
+app.post("/api/characters/sample", (req, res) => {
+  const sample = loadSampleCharacter();
+  if (!sample) {
+    return res.status(500).json({ error: "Không tìm thấy sample-character.json" });
+  }
+
+  const clone = JSON.parse(JSON.stringify(sample));
+  clone.id = uuidv4();
+  clone.name = req.body?.name || `${sample.name || "Demo Hero"} ${Math.floor(Math.random() * 900 + 100)}`;
+  clone.createdAt = new Date().toISOString();
+  clone.updatedAt = undefined;
+
+  characters.push(clone);
+  saveCharactersToFile();
+
+  res.status(201).json(clone);
 });
 
 // Update character
@@ -359,6 +439,7 @@ app.put("/api/characters/:id", (req, res) => {
     updatedAt: new Date().toISOString(),
   };
 
+  saveCharactersToFile();
   res.json(characters[index]);
 });
 
@@ -370,196 +451,34 @@ app.delete("/api/characters/:id", (req, res) => {
   }
 
   characters.splice(index, 1);
+  saveCharactersToFile();
   res.status(204).send();
 });
 
 // Export character sheet to PDF
+const { exportCharacterToPDF } = require("./pdfExport");
+
 app.post("/api/characters/:id/export-pdf", async (req, res) => {
+  console.log("[PDF Export] Starting PDF export for character:", req.params.id);
   try {
     const character = characters.find((c) => c.id === req.params.id);
     if (!character) {
+      console.log("[PDF Export] Character not found:", req.params.id);
       return res.status(404).json({ error: "Nhân vật không tồn tại" });
     }
+    console.log("[PDF Export] Character found:", character.name);
+    console.log("[PDF Export] Character has calculatedStats:", !!character.calculatedStats);
+    console.log("[PDF Export] About to call exportCharacterToPDF...");
 
-    // Load PDF template
-    const pdfPath = path.join(__dirname, "..", "data", "5E_CharacterSheet_Fillable.pdf");
-    if (!fs.existsSync(pdfPath)) {
-      return res.status(404).json({ error: "PDF template không tồn tại" });
-    }
-
-    const pdfBytes = fs.readFileSync(pdfPath);
-    const pdfDoc = await PDFDocument.load(pdfBytes);
-    const form = pdfDoc.getForm();
-
-    // Helper function to safely set field value
-    const setField = (fieldName, value) => {
-      try {
-        const field = form.getTextField(fieldName);
-        if (field && value !== undefined && value !== null) {
-          field.setText(String(value));
-        }
-      } catch (e) {
-        // Field might not exist or be wrong type, skip
-        try {
-          const checkbox = form.getCheckBox(fieldName);
-          if (checkbox && value) {
-            checkbox.check();
-          }
-        } catch (e2) {
-          // Field doesn't exist, skip
-        }
-      }
-    };
-
-    // Basic Information
-    setField("CharacterName", character.name || "");
-    setField("ClassLevel", `${character.className || ""} ${character.level || 1}`);
-    setField("Background", character.background || "");
-    setField("PlayerName", ""); // Not stored
-    setField("Race", character.race || "");
-    if (character.subrace) {
-      setField("Race", `${character.race || ""} (${character.subrace})`);
-    }
-    setField("Alignment", character.alignment || "");
-    setField("ExperiencePoints", ""); // Not stored
-
-    // Ability Scores
-    if (character.abilityScores) {
-      setField("Strength", character.abilityScores.str || 10);
-      setField("Dexterity", character.abilityScores.dex || 10);
-      setField("Constitution", character.abilityScores.con || 10);
-      setField("Intelligence", character.abilityScores.int || 10);
-      setField("Wisdom", character.abilityScores.wis || 10);
-      setField("Charisma", character.abilityScores.cha || 10);
-    }
-
-    // Ability Modifiers
-    if (character.calculatedStats) {
-      const stats = character.calculatedStats;
-      const getModifier = (score) => Math.floor((score - 10) / 2);
-      
-      if (character.abilityScores) {
-        setField("STRmod", getModifier(character.abilityScores.str || 10));
-        setField("DEXmod", getModifier(character.abilityScores.dex || 10));
-        setField("CONmod", getModifier(character.abilityScores.con || 10));
-        setField("INTmod", getModifier(character.abilityScores.int || 10));
-        setField("WISmod", getModifier(character.abilityScores.wis || 10));
-        setField("CHamod", getModifier(character.abilityScores.cha || 10));
-      }
-
-      // Calculated Stats
-      setField("AC", stats.ac || 10);
-      setField("Initiative", stats.initiative || 0);
-      setField("Speed", stats.speed || 30);
-      setField("Passive", stats.passivePerception || 10);
-      setField("ProficiencyBonus", stats.proficiencyBonus || 2);
-      setField("HPMax", stats.maxHp || 0);
-      setField("HP", stats.hp || 0);
-      setField("HDTotal", stats.hitDie || "");
-    }
-
-    // Skills - Mark proficient ones
-    if (character.calculatedStats && character.calculatedStats.skills) {
-      const skills = character.calculatedStats.skills;
-      const skillFields = {
-        "Acrobatics": "Acrobatics",
-        "Animal Handling": "Animal",
-        "Arcana": "Arcana",
-        "Athletics": "Athletics",
-        "Deception": "Deception",
-        "History": "History",
-        "Insight": "Insight",
-        "Intimidation": "Intimidation",
-        "Investigation": "Investigation",
-        "Medicine": "Medicine",
-        "Nature": "Nature",
-        "Perception": "Perception",
-        "Performance": "Performance",
-        "Persuasion": "Persuasion",
-        "Religion": "Religion",
-        "Sleight of Hand": "Sleight",
-        "Stealth": "Stealth",
-        "Survival": "Survival"
-      };
-
-      Object.entries(skillFields).forEach(([skillName, fieldPrefix]) => {
-        const skill = skills[skillName];
-        if (skill) {
-          setField(`${fieldPrefix}Mod`, skill.modifier || 0);
-          if (skill.proficient) {
-            setField(`Proficiency${fieldPrefix}`, true);
-          }
-        }
-      });
-    }
-
-    // Saving Throws
-    if (character.calculatedStats && character.calculatedStats.savingThrows) {
-      const saves = character.calculatedStats.savingThrows;
-      setField("ST Strength", saves.str?.modifier || 0);
-      setField("ST Dexterity", saves.dex?.modifier || 0);
-      setField("ST Constitution", saves.con?.modifier || 0);
-      setField("ST Intelligence", saves.int?.modifier || 0);
-      setField("ST Wisdom", saves.wis?.modifier || 0);
-      setField("ST Charisma", saves.cha?.modifier || 0);
-      
-      if (saves.str?.proficient) setField("Check Box 11", true);
-      if (saves.dex?.proficient) setField("Check Box 18", true);
-      if (saves.con?.proficient) setField("Check Box 19", true);
-      if (saves.int?.proficient) setField("Check Box 20", true);
-      if (saves.wis?.proficient) setField("Check Box 21", true);
-      if (saves.cha?.proficient) setField("Check Box 22", true);
-    }
-
-    // Equipment
-    if (character.calculatedStats && character.calculatedStats.expandedEquipment) {
-      const equipment = character.calculatedStats.expandedEquipment.join(", ");
-      setField("Equipment", equipment);
-    } else if (character.equipment) {
-      setField("Equipment", character.equipment.join(", "));
-    }
-
-    // Spells
-    if (character.spells) {
-      const allSpells = [];
-      if (character.spells.cantrips) allSpells.push(...character.spells.cantrips.map(s => `Cantrip: ${s}`));
-      for (let level = 1; level <= 9; level++) {
-        const levelKey = `level${level}`;
-        const levelSpells = character.spells[levelKey];
-        if (levelSpells && Array.isArray(levelSpells)) {
-          allSpells.push(...levelSpells.map(s => `Level ${level}: ${s}`));
-        }
-      }
-      setField("Spells", allSpells.join(", "));
-    }
-
-    // Features & Traits
-    const features = [];
-    if (character.className) features.push(`Class: ${character.className}`);
-    if (character.subclass) features.push(`Subclass: ${character.subclass}`);
-    if (character.race) features.push(`Race: ${character.race}`);
-    if (character.subrace) features.push(`Subrace: ${character.subrace}`);
-    if (character.background) features.push(`Background: ${character.background}`);
-    if (character.feats && character.feats.length > 0) {
-      features.push(`Feats: ${character.feats.join(", ")}`);
-    }
-    setField("Features and Traits", features.join("\n"));
-
-    // Personality
-    if (character.ideals) setField("Ideals", character.ideals);
-    if (character.bonds) setField("Bonds", character.bonds);
-    if (character.flaws) setField("Flaws", character.flaws);
-
-    // Flatten form to make it non-editable
-    form.flatten();
-
-    // Generate PDF bytes
-    const filledPdfBytes = await pdfDoc.save();
+    // Export character to PDF using the new module
+    const filledPdfBytes = await exportCharacterToPDF(character);
+    
+    console.log("[PDF Export] PDF export completed, size:", filledPdfBytes.length, "bytes");
 
     // Send PDF
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="${character.name || "character"}_sheet.pdf"`);
-    res.send(Buffer.from(filledPdfBytes));
+    res.send(filledPdfBytes);
   } catch (error) {
     console.error("Error generating PDF:", error);
     res.status(500).json({ error: "Không thể tạo PDF. Vui lòng thử lại." });
@@ -567,6 +486,317 @@ app.post("/api/characters/:id/export-pdf", async (req, res) => {
 });
 
 // Get PHB races
+app.get("/api/data/races/phb", (_req, res) => {
+  const racesData = loadData("races.json");
+  if (!racesData || !racesData.race) {
+    return res.status(500).json({ error: "Không thể load dữ liệu races" });
+  }
+
+  const phbRaces = racesData.race.filter((race) => race.source === "PHB");
+  res.json(phbRaces);
+});
+
+// Get PHB subraces for a specific race
+app.get("/api/data/races/:raceName/subraces", (req, res) => {
+  const racesData = loadData("races.json");
+  if (!racesData || !racesData.subrace) {
+    return res.status(500).json({ error: "Không thể load dữ liệu subraces" });
+  }
+
+  const raceName = req.params.raceName;
+  let phbSubraces = racesData.subrace.filter(
+    (subrace) =>
+      subrace.raceName === raceName &&
+      subrace.raceSource === "PHB" &&
+      subrace.source === "PHB"
+  );
+  
+  // For Human, if there's a subrace without a name (Standard Human), add a name
+  if (raceName === "Human") {
+    phbSubraces = phbSubraces.map((subrace) => {
+      if (!subrace.name || subrace.name.trim() === "") {
+        return { ...subrace, name: "Standard Human" };
+      }
+      return subrace;
+    });
+  }
+  
+  res.json(phbSubraces);
+});
+
+// Get specific subrace by name
+app.get("/api/data/subraces/:name", (req, res) => {
+  const racesData = loadData("races.json");
+  if (!racesData || !racesData.subrace) {
+    return res.status(500).json({ error: "Không thể load dữ liệu subraces" });
+  }
+
+  const subraceName = req.params.name;
+  let subrace = racesData.subrace.find(
+    (s) => {
+      const name = s.name || (s.raceName === "Human" ? "Standard Human" : "");
+      return name.toLowerCase() === subraceName.toLowerCase() && s.source === "PHB";
+    }
+  );
+
+  // Handle "Standard Human" case
+  if (!subrace && subraceName.toLowerCase() === "standard human") {
+    subrace = racesData.subrace.find(
+      (s) => s.raceName === "Human" && (!s.name || s.name.trim() === "") && s.source === "PHB"
+    );
+    if (subrace) {
+      subrace = { ...subrace, name: "Standard Human" };
+    }
+  }
+
+  if (!subrace) {
+    return res.status(404).json({ error: "Không tìm thấy subrace" });
+  }
+
+  res.json(subrace);
+});
+
+// Get PHB races
+app.get("/api/data/races/phb", (_req, res) => {
+  const racesData = loadData("races.json");
+  if (!racesData || !racesData.race) {
+    return res.status(500).json({ error: "Không thể load dữ liệu races" });
+  }
+
+  const phbRaces = racesData.race.filter((race) => race.source === "PHB");
+  res.json(phbRaces);
+});
+
+// Get PHB subraces for a specific race
+app.get("/api/data/races/:raceName/subraces", (req, res) => {
+  const racesData = loadData("races.json");
+  if (!racesData || !racesData.subrace) {
+    return res.status(500).json({ error: "Không thể load dữ liệu subraces" });
+  }
+
+  const raceName = req.params.raceName;
+  let phbSubraces = racesData.subrace.filter(
+    (subrace) =>
+      subrace.raceName === raceName &&
+      subrace.raceSource === "PHB" &&
+      subrace.source === "PHB"
+  );
+  
+  // For Human, if there's a subrace without a name (Standard Human), add a name
+  if (raceName === "Human") {
+    phbSubraces = phbSubraces.map((subrace) => {
+      if (!subrace.name || subrace.name.trim() === "") {
+        return { ...subrace, name: "Standard Human" };
+      }
+      return subrace;
+    });
+  }
+  
+  res.json(phbSubraces);
+});
+
+// Get PHB races
+app.get("/api/data/races/phb", (_req, res) => {
+  const racesData = loadData("races.json");
+  if (!racesData || !racesData.race) {
+    return res.status(500).json({ error: "Không thể load dữ liệu races" });
+  }
+
+  const phbRaces = racesData.race.filter((race) => race.source === "PHB");
+  res.json(phbRaces);
+});
+
+// Get PHB subraces for a specific race
+app.get("/api/data/races/:raceName/subraces", (req, res) => {
+  const racesData = loadData("races.json");
+  if (!racesData || !racesData.subrace) {
+    return res.status(500).json({ error: "Không thể load dữ liệu subraces" });
+  }
+
+  const raceName = req.params.raceName;
+  let phbSubraces = racesData.subrace.filter(
+    (subrace) =>
+      subrace.raceName === raceName &&
+      subrace.raceSource === "PHB" &&
+      subrace.source === "PHB"
+  );
+  
+  // For Human, if there's a subrace without a name (Standard Human), add a name
+  if (raceName === "Human") {
+    phbSubraces = phbSubraces.map((subrace) => {
+      if (!subrace.name || subrace.name.trim() === "") {
+        return { ...subrace, name: "Standard Human" };
+      }
+      return subrace;
+    });
+  }
+  
+  res.json(phbSubraces);
+});
+
+// Get specific subrace by name
+app.get("/api/data/subraces/:name", (req, res) => {
+  const racesData = loadData("races.json");
+  if (!racesData || !racesData.subrace) {
+    return res.status(500).json({ error: "Không thể load dữ liệu subraces" });
+  }
+
+  const subraceName = req.params.name;
+  let subrace = racesData.subrace.find(
+    (s) => {
+      const name = s.name || (s.raceName === "Human" ? "Standard Human" : "");
+      return name.toLowerCase() === subraceName.toLowerCase() && s.source === "PHB";
+    }
+  );
+
+  // Handle "Standard Human" case
+  if (!subrace && subraceName.toLowerCase() === "standard human") {
+    subrace = racesData.subrace.find(
+      (s) => s.raceName === "Human" && (!s.name || s.name.trim() === "") && s.source === "PHB"
+    );
+    if (subrace) {
+      subrace = { ...subrace, name: "Standard Human" };
+    }
+  }
+
+  if (!subrace) {
+    return res.status(404).json({ error: "Subrace không tồn tại" });
+  }
+
+  res.json(subrace);
+});
+
+// Get PHB races
+app.get("/api/data/races/phb", (_req, res) => {
+  const racesData = loadData("races.json");
+  if (!racesData || !racesData.race) {
+    return res.status(500).json({ error: "Không thể load dữ liệu races" });
+  }
+
+  const phbRaces = racesData.race.filter((race) => race.source === "PHB");
+  res.json(phbRaces);
+});
+
+// Get PHB subraces for a specific race
+app.get("/api/data/races/:raceName/subraces", (req, res) => {
+  const racesData = loadData("races.json");
+  if (!racesData || !racesData.subrace) {
+    return res.status(500).json({ error: "Không thể load dữ liệu subraces" });
+  }
+
+  const raceName = req.params.raceName;
+  let phbSubraces = racesData.subrace.filter(
+    (subrace) =>
+      subrace.raceName === raceName &&
+      subrace.raceSource === "PHB" &&
+      subrace.source === "PHB"
+  );
+  
+  // For Human, if there's a subrace without a name (Standard Human), add a name
+  if (raceName === "Human") {
+    phbSubraces = phbSubraces.map((subrace) => {
+      if (!subrace.name || subrace.name.trim() === "") {
+        return { ...subrace, name: "Standard Human" };
+      }
+      return subrace;
+    });
+  }
+  
+  res.json(phbSubraces);
+});
+
+// Get specific subrace by name
+app.get("/api/data/subraces/:name", (req, res) => {
+  const racesData = loadData("races.json");
+  if (!racesData || !racesData.subrace) {
+    return res.status(500).json({ error: "Không thể load dữ liệu subraces" });
+  }
+
+  const subraceName = req.params.name;
+  let subrace = racesData.subrace.find(
+    (subrace) => subrace.name === subraceName || subrace.name?.toLowerCase() === subraceName.toLowerCase()
+  );
+
+  // For Human, if there's a subrace without a name (Standard Human), add a name
+  if (!subrace && subraceName === "Standard Human") {
+    subrace = racesData.subrace.find((subrace) => !subrace.name || subrace.name.trim() === "");
+    if (subrace) {
+      subrace = { ...subrace, name: "Standard Human" };
+    }
+  }
+
+  if (!subrace) {
+    return res.status(404).json({ error: "Subrace không tồn tại" });
+  }
+
+  res.json(subrace);
+});
+
+// Get PHB races
+app.get("/api/data/races/phb", (_req, res) => {
+  const racesData = loadData("races.json");
+  if (!racesData || !racesData.race) {
+    return res.status(500).json({ error: "Không thể load dữ liệu races" });
+  }
+
+  const phbRaces = racesData.race.filter((race) => race.source === "PHB");
+  res.json(phbRaces);
+});
+
+// Get PHB subraces for a specific race
+app.get("/api/data/races/:raceName/subraces", (req, res) => {
+  const racesData = loadData("races.json");
+  if (!racesData || !racesData.subrace) {
+    return res.status(500).json({ error: "Không thể load dữ liệu subraces" });
+  }
+
+  const raceName = req.params.raceName;
+  let phbSubraces = racesData.subrace.filter(
+    (subrace) =>
+      subrace.raceName === raceName &&
+      subrace.raceSource === "PHB" &&
+      subrace.source === "PHB"
+  );
+  
+  // For Human, if there's a subrace without a name (Standard Human), add a name
+  if (raceName === "Human") {
+    phbSubraces = phbSubraces.map((subrace) => {
+      if (!subrace.name || subrace.name.trim() === "") {
+        return { ...subrace, name: "Standard Human" };
+      }
+      return subrace;
+    });
+  }
+  
+  res.json(phbSubraces);
+});
+
+// Get specific subrace by name
+app.get("/api/data/subraces/:name", (req, res) => {
+  const racesData = loadData("races.json");
+  if (!racesData || !racesData.subrace) {
+    return res.status(500).json({ error: "Không thể load dữ liệu subraces" });
+  }
+
+  const subraceName = req.params.name;
+  let subrace = racesData.subrace.find(
+    (subrace) => subrace.name === subraceName || subrace.name?.toLowerCase() === subraceName.toLowerCase()
+  );
+
+  // For Human, if there's a subrace without a name (Standard Human), add a name
+  if (!subrace && subraceName === "Standard Human") {
+    subrace = racesData.subrace.find((subrace) => !subrace.name || subrace.name.trim() === "");
+    if (subrace) {
+      subrace = { ...subrace, name: "Standard Human" };
+    }
+  }
+
+  if (!subrace) {
+    return res.status(404).json({ error: "Subrace không tồn tại" });
+  }
+
+  res.json(subrace);
+});
 app.get("/api/data/races/phb", (_req, res) => {
   const racesData = loadData("races.json");
   if (!racesData || !racesData.race) {
@@ -1446,12 +1676,54 @@ app.get("/api/data/lookup/:type/:name", (req, res) => {
           description: "The attack misses the target",
         });
       case "optionalfeature":
-        // Use index for O(1) lookup
+        const featureSearchName = name.toLowerCase();
+        
+        // 1. Search in optionalfeatures.json
+        const optionalFeaturesData = dataCache["optionalfeatures.json"] || loadData("optionalfeatures.json");
+        if (optionalFeaturesData?.optionalfeature) {
+          const optFeature = optionalFeaturesData.optionalfeature.find(
+            (f) => f.name && f.name.toLowerCase() === featureSearchName
+          );
+          if (optFeature) return res.json(optFeature);
+        }
+        
+        // 2. Search in senses.json (for Darkvision, Blindsight, etc.)
+        const sensesData = dataCache["senses.json"] || loadData("senses.json");
+        if (sensesData?.sense) {
+          const sense = sensesData.sense.find(
+            (s) => s.name && s.name.toLowerCase() === featureSearchName
+          );
+          if (sense) return res.json(sense);
+        }
+        
+        // 3. Search in race features from races.json (for Menacing, Relentless Endurance, etc.)
+        const raceFeaturesData = dataCache["races.json"] || loadData("races.json");
+        if (raceFeaturesData?.race) {
+          for (const race of raceFeaturesData.race) {
+            if (race.entries && Array.isArray(race.entries)) {
+              for (const entry of race.entries) {
+                if (entry.name && entry.name.toLowerCase() === featureSearchName && entry.type === "entries") {
+                  // Return as a feature object
+                  return res.json({
+                    name: entry.name,
+                    entries: entry.entries,
+                    source: race.source || "PHB",
+                    page: race.page,
+                    type: "raceFeature"
+                  });
+                }
+              }
+            }
+          }
+        }
+        
+        // 4. Use index for class features lookup
         if (dataIndexes.features) {
-          const feature = dataIndexes.features.get(name.toLowerCase());
+          const feature = dataIndexes.features.get(featureSearchName);
           if (feature) return res.json(feature);
         }
-        // Fallback - search in cached class files
+        
+        // 5. Fallback - search in cached class files
         const classFiles = [
           "class-barbarian.json",
           "class-bard.json",
@@ -1467,7 +1739,6 @@ app.get("/api/data/lookup/:type/:name", (req, res) => {
           "class-wizard.json",
         ];
         
-        const featureSearchName = name.toLowerCase();
         for (const file of classFiles) {
           const classData = dataCache[`class/${file}`] || loadData(`class/${file}`);
           if (classData?.classFeature) {

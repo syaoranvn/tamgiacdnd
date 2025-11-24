@@ -3,7 +3,7 @@ import type { Character, Class, Background } from "../../types";
 import TextWithTooltips from "../TextWithTooltips";
 import { apiUrl } from "../../config/api";
 
-interface Step5EquipmentProps {
+interface Step8EquipmentProps {
   character: Partial<Character>;
   onUpdate: (updates: Partial<Character>) => void;
 }
@@ -25,7 +25,7 @@ interface SelectedEquipment {
   [choiceIndex: number]: string; // Maps choice index to selected option ("a", "b", or "_")
 }
 
-export default function Step5Equipment({
+export default function Step8Equipment({
   character,
   onUpdate,
 }: Step5EquipmentProps) {

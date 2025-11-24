@@ -11,11 +11,12 @@ import { startPreload } from "./TextWithTooltips";
 import Step1Race from "./wizard/Step1Race";
 import Step2Class from "./wizard/Step2Class";
 import Step3AbilityScores from "./wizard/Step3AbilityScores";
-import Step4Description from "./wizard/Step4Description";
-import Step5Equipment from "./wizard/Step5Equipment";
-import Step6Spells from "./wizard/Step6Spells";
-import Step6_5Calculations from "./wizard/Step6_5Calculations";
-import Step7CharacterSheet from "./wizard/Step7CharacterSheet";
+import Step4Background from "./wizard/Step4Background";
+import Step5Description from "./wizard/Step5Description";
+import Step6Calculations from "./wizard/Step6Calculations";
+import Step8Equipment from "./wizard/Step5Equipment";
+import Step9Spells from "./wizard/Step6Spells";
+import Step10CharacterSheet from "./wizard/Step7CharacterSheet";
 import ConfirmDialog from "./ConfirmDialog";
 import { apiUrl } from "../config/api";
 
@@ -29,11 +30,13 @@ const STEPS: { number: CreationStep; title: string; hidden?: boolean }[] = [
   { number: 1, title: "Chọn chủng tộc" },
   { number: 2, title: "Chọn lớp" },
   { number: 3, title: "Xác định chỉ số" },
-  { number: 4, title: "Mô tả nhân vật" },
-  { number: 5, title: "Chọn trang bị" },
-  { number: 6, title: "Chọn phép thuật" },
-  { number: 6.5, title: "Tính toán chỉ số", hidden: true },
-  { number: 7, title: "Hoàn thiện Character Sheet" },
+  { number: 4, title: "Chọn Background" },
+  { number: 5, title: "Mô tả nhân vật" },
+  { number: 6, title: "Tính toán chỉ số" },
+  { number: 7, title: "Tính HP" }, // HP được tính trong Step6, nhưng hiển thị riêng
+  { number: 8, title: "Chọn trang bị" },
+  { number: 9, title: "Chọn phép thuật" },
+  { number: 10, title: "Hoàn thiện Character Sheet" },
 ];
 
 export default function CharacterWizard({
@@ -117,27 +120,14 @@ export default function CharacterWizard({
     if (e) {
       e.preventDefault();
     }
-    if (currentStep === 6) {
-      // Auto-advance to 6.5 (calculations), then to 7
-      setCurrentStep(6.5);
-      // After a brief moment, move to step 7
-      setTimeout(() => {
-        setCurrentStep(7);
-      }, 100);
-    } else if (currentStep < 6) {
+    if (currentStep < 10) {
       setCurrentStep((prev) => (prev + 1) as CreationStep);
     }
   };
 
   const handlePrevious = () => {
-    if (currentStep === 7) {
-      // Go back to step 6 (skip 6.5)
-      setCurrentStep(6);
-    } else if (currentStep > 1) {
-      setCurrentStep((prev) => {
-        if (prev === 6.5) return 6; // Skip 6.5 when going back
-        return (prev - 1) as CreationStep;
-      });
+    if (currentStep > 1) {
+      setCurrentStep((prev) => (prev - 1) as CreationStep);
     }
   };
 
@@ -187,10 +177,16 @@ export default function CharacterWizard({
       case 3:
         return true; // Ability scores always valid
       case 4:
-        return !!character.background && !!character.alignment;
+        return !!character.background; // Only background is required
       case 5:
-        return true; // Equipment is optional
+        return !!character.name && !!character.alignment; // Name and alignment required
       case 6:
+        return true; // Calculations step - always allow
+      case 7:
+        return true; // HP is calculated in step 6, just show info
+      case 8:
+        return true; // Equipment is optional
+      case 9:
         // Spells are optional (only for spellcasting classes)
         // Check if class is a spellcaster
         const spellcastingClasses = ["Wizard", "Sorcerer", "Warlock", "Cleric", "Druid", "Bard", "Ranger", "Paladin"];
@@ -199,9 +195,7 @@ export default function CharacterWizard({
           return true;
         }
         return true; // Non-spellcasters can skip this step
-      case 6.5:
-        return true; // Always allow (hidden step)
-      case 7:
+      case 10:
         return true; // Always allow (final step)
       default:
         return false;
@@ -241,9 +235,9 @@ export default function CharacterWizard({
                 <div className="flex flex-col items-center">
                   <div
                     className={`flex h-12 w-12 items-center justify-center rounded-full border-2 font-display text-lg transition-all ${
-                      currentStep === step.number || (currentStep === 6.5 && step.number === 7)
+                      currentStep === step.number
                         ? "border-amber-600 bg-amber-600 text-white"
-                        : currentStep > step.number || (currentStep === 7 && step.number < 7)
+                        : currentStep > step.number
                         ? "border-amber-400 bg-amber-100 text-amber-700"
                         : "border-slate-300 bg-white text-slate-400"
                     }`}
@@ -252,7 +246,7 @@ export default function CharacterWizard({
                   </div>
                   <div
                     className={`mt-2 text-center text-xs ${
-                      currentStep === step.number || (currentStep === 6.5 && step.number === 7)
+                      currentStep === step.number
                         ? "font-medium text-amber-700"
                         : "text-slate-500"
                     }`}
@@ -263,7 +257,7 @@ export default function CharacterWizard({
                 {index < filteredSteps.length - 1 && (
                   <div
                     className={`mx-2 h-0.5 flex-1 ${
-                      currentStep > step.number || (currentStep === 7 && step.number < 7) ? "bg-amber-400" : "bg-slate-300"
+                      currentStep > step.number ? "bg-amber-400" : "bg-slate-300"
                     }`}
                   />
                 )}
@@ -277,7 +271,7 @@ export default function CharacterWizard({
           onSubmit={handleSubmit} 
           onKeyDown={(e) => {
             // Prevent form submission on Enter key unless on final step
-            if (e.key === "Enter" && currentStep < 5) {
+            if (e.key === "Enter" && currentStep < 10) {
               e.preventDefault();
             }
           }}
@@ -358,7 +352,7 @@ export default function CharacterWizard({
               />
             )}
             {currentStep === 4 && (
-              <Step4Description
+              <Step4Background
                 backgrounds={backgrounds}
                 character={character}
                 backgroundSkillChoices={character.backgroundSkillChoices}
@@ -387,25 +381,49 @@ export default function CharacterWizard({
               />
             )}
             {currentStep === 5 && (
-              <Step5Equipment
+              <Step5Description
                 character={character}
                 onUpdate={(updates) => updateCharacter(updates)}
               />
             )}
             {currentStep === 6 && (
-              <Step6Spells
-                character={character}
-                onUpdate={(updates) => updateCharacter(updates)}
-              />
-            )}
-            {currentStep === 6.5 && (
-              <Step6_5Calculations
+              <Step6Calculations
                 character={character}
                 onUpdate={(updates) => updateCharacter(updates)}
               />
             )}
             {currentStep === 7 && (
-              <Step7CharacterSheet
+              <div>
+                <h2 className="mb-4 font-display text-2xl text-ink">Bước 7: Hit Points</h2>
+                <p className="mb-6 text-slate-600">
+                  HP đã được tính toán ở bước 6. Cấp 1: HP = Hit Die tối đa + chỉ số CON.
+                </p>
+                {character.calculatedStats && (
+                  <div className="rounded-lg border border-amber-100 bg-white p-6">
+                    <div className="text-lg font-semibold text-slate-800">
+                      HP: {character.calculatedStats.hp} / {character.calculatedStats.maxHp}
+                    </div>
+                    <div className="text-sm text-slate-600 mt-2">
+                      Hit Die: {character.calculatedStats.hitDie}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            {currentStep === 8 && (
+              <Step8Equipment
+                character={character}
+                onUpdate={(updates) => updateCharacter(updates)}
+              />
+            )}
+            {currentStep === 9 && (
+              <Step9Spells
+                character={character}
+                onUpdate={(updates) => updateCharacter(updates)}
+              />
+            )}
+            {currentStep === 10 && (
+              <Step10CharacterSheet
                 character={character}
                 onComplete={handleSubmit}
               />
@@ -422,7 +440,7 @@ export default function CharacterWizard({
               {currentStep === 1 ? "Hủy" : "Quay lại"}
             </button>
             <div className="flex gap-4">
-              {currentStep < 6 ? (
+              {currentStep < 10 ? (
                 <button
                   type="button"
                   onClick={(e) => {
@@ -435,20 +453,7 @@ export default function CharacterWizard({
                 >
                   Tiếp theo
                 </button>
-              ) : currentStep === 6 ? (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handleNext(e);
-                  }}
-                  disabled={!canProceed()}
-                  className="rounded-2xl bg-amber-600 px-6 py-3 text-white transition-all hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Tiếp theo
-                </button>
-              ) : currentStep === 7 ? (
+              ) : currentStep === 10 ? (
                 <button
                   type="button"
                   onClick={(e) => {

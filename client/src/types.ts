@@ -11,6 +11,7 @@ export interface Character {
   background: string;
   alignment: string;
   level: number;
+  experiencePoints?: number; // XP for leveling (defaults to 0)
   abilityScores: AbilityScores;
   proficiencies: string[];
   equipment: string[];
@@ -125,7 +126,7 @@ export interface Background {
   [key: string]: any;
 }
 
-export type CreationStep = 1 | 2 | 3 | 4 | 5 | 6 | 6.5 | 7;
+export type CreationStep = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
 
 export interface CalculatedStats {
   ac: number; // Armor Class
@@ -133,11 +134,25 @@ export interface CalculatedStats {
   speed: number;
   passivePerception: number;
   proficiencyBonus: number;
+  abilityModifiers: Record<AbilityKey, number>; // Ability score modifiers (e.g., str: 2, dex: -1)
   savingThrows: Record<AbilityKey, { proficient: boolean; modifier: number }>;
   hp: number;
+  hpCurrent: number; // Current HP (defaults to maxHp)
+  hpMax: number; // Maximum HP (alias for maxHp)
   maxHp: number;
   hitDie: string;
+  hitDice: string; // Alias for hitDie
   skills: Record<string, { proficient: boolean; modifier: number }>;
   expandedEquipment: string[]; // Equipment với pack contents đã mở
+  weapons?: Array<{
+    name: string;
+    attackBonus: number;
+    damage: string; // e.g., "1d6"
+    damageType: string; // e.g., "slashing", "piercing", "bludgeoning"
+  }>;
+  spellSlots?: Record<string, { total: number; used: number }>; // e.g., "level1": { total: 2, used: 0 }
+  spellSaveDC?: number;
+  spellAttackBonus?: number;
+  spellcastingAbility?: string; // "str", "dex", "con", "int", "wis", "cha"
 }
 

@@ -110,12 +110,12 @@ const SpellTooltip = ({ spellName }: { spellName: string }) => {
   );
 };
 
-interface Step7CharacterSheetProps {
+interface Step10CharacterSheetProps {
   character: Partial<Character>;
   onComplete: (event: any) => void;
 }
 
-export default function Step7CharacterSheet({ character, onComplete }: Step7CharacterSheetProps) {
+export default function Step10CharacterSheet({ character, onComplete }: Step7CharacterSheetProps) {
   const [classData, setClassData] = useState<Class | null>(null);
   const [raceData, setRaceData] = useState<Race | null>(null);
   const [subraceData, setSubraceData] = useState<any>(null);
@@ -123,6 +123,40 @@ export default function Step7CharacterSheet({ character, onComplete }: Step7Char
   const [backgroundData, setBackgroundData] = useState<Background | null>(null);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
+
+  const handleExportPDF = async () => {
+    if (!character.id) {
+      console.error("Character ID not found");
+      return;
+    }
+
+    setExporting(true);
+    try {
+      const response = await fetch(apiUrl(`api/characters/${character.id}/export-pdf`), {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to export PDF");
+      }
+
+      // Get PDF blob
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${character.name || "character"}_sheet.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Error exporting PDF:", error);
+      alert("Không thể xuất PDF. Vui lòng thử lại.");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   useEffect(() => {
     const loadData = async () => {
