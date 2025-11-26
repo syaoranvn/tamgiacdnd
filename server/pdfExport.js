@@ -41,6 +41,52 @@ function httpRequest(url) {
 }
 
 /**
+ * Parse and format special tags like {@item dagger|phb|daggers}, {@spell minor illusion}, etc.
+ */
+function formatSpecialTags(text) {
+  if (!text || typeof text !== "string") {
+    return text;
+  }
+  
+  // Replace {@item name|source|plural} with just "name"
+  // Handle cases like {@item thieves' tools|PHB} - match everything up to | or }
+  text = text.replace(/{@item\s+([^}]+?)(?:\|[^}]*)?}/gi, (match, itemName) => {
+    // Extract just the item name (before the first |)
+    const name = itemName.split('|')[0].trim();
+    return name;
+  });
+  
+  // Replace {@spell name} with just "name"
+  text = text.replace(/{@spell\s+([^}]+)}/gi, "$1");
+  
+  // Replace {@skill name} with just "name"
+  text = text.replace(/{@skill\s+([^}]+)}/gi, "$1");
+  
+  // Replace {@language name} with just "name"
+  text = text.replace(/{@language\s+([^}]+)}/gi, "$1");
+  
+  // Replace {@damage type} with just "type"
+  text = text.replace(/{@damage\s+([^}]+)}/gi, "$1");
+  
+  // Replace {@condition name} with just "name"
+  text = text.replace(/{@condition\s+([^}]+)}/gi, "$1");
+  
+  // Replace {@filter name|...} with just "name"
+  text = text.replace(/{@filter\s+([^|}]+)(?:\|[^}]*)?}/gi, "$1");
+  
+  // Replace {@dice XdY} with "XdY"
+  text = text.replace(/{@dice\s+([^}]+)}/gi, "$1");
+  
+  // Replace {@status name} with just "name"
+  text = text.replace(/{@status\s+([^}]+)}/gi, "$1");
+  
+  // Replace any remaining {@...} tags with empty string
+  text = text.replace(/{@[^}]+}/g, "");
+  
+  return text.trim();
+}
+
+/**
  * Remove characters that the PDF's WinAnsi font cannot render
  */
 function sanitizeForPdfValue(value) {
@@ -49,6 +95,9 @@ function sanitizeForPdfValue(value) {
   }
 
   let strValue = String(value);
+  
+  // First, format special tags
+  strValue = formatSpecialTags(strValue);
 
   // Handle special Vietnamese characters that don't decompose well
   strValue = strValue.replace(/đ/g, "d").replace(/Đ/g, "D");
@@ -130,6 +179,7 @@ function setFieldWithLog(form, fieldName, value, skillName = "") {
 
 /**
  * Helper to extract feature names from entries recursively
+ * ONLY extracts feature names, NO descriptions
  */
 function extractFeatureNames(entries, level = 1) {
   const features = [];
@@ -143,42 +193,70 @@ function extractFeatureNames(entries, level = 1) {
         const requiredLevel = parseInt(levelMatch[1]);
         if (requiredLevel <= level) {
           const featureName = entry.replace(/\s*\|\|\d+$/, "").trim();
-          if (featureName && !features.includes(featureName)) {
-            features.push(featureName);
+          // Extract just the feature name part (before any description)
+          const nameOnly = featureName.split(/[\.\!\?]/)[0].trim();
+          if (nameOnly && nameOnly.length <= 80 && !features.includes(nameOnly)) {
+            features.push(nameOnly);
           }
         }
-      } else if (entry.trim() && entry.length > 3) {
-        // Simple string entry that might be a feature
+      } else {
+        // For string entries without level, only take if it's VERY short (likely a feature name)
+        // Skip anything longer than 50 characters or contains sentence punctuation
         const trimmed = entry.trim();
-        if (!trimmed.toLowerCase().includes("age") && 
-            !trimmed.toLowerCase().includes("size") && 
-            !trimmed.toLowerCase().includes("speed") &&
-            !trimmed.toLowerCase().includes("language") &&
-            !trimmed.toLowerCase().includes("ability score") &&
-            !trimmed.toLowerCase().includes("proficiency") &&
-            trimmed.length > 5) {
-          if (!features.includes(trimmed)) {
-            features.push(trimmed);
+        if (trimmed.length > 3 && trimmed.length <= 50 && 
+            !trimmed.includes(".") && !trimmed.includes("!") && !trimmed.includes("?") &&
+            !trimmed.includes(",") && !trimmed.includes(";")) {
+          const lowerTrimmed = trimmed.toLowerCase();
+          // Skip if it looks like a description
+          const isDescription = 
+            lowerTrimmed.includes("you know") ||
+            lowerTrimmed.includes("through ") ||
+            lowerTrimmed.includes("work with") ||
+            lowerTrimmed.includes("what was") ||
+            lowerTrimmed.includes("some ") ||
+            lowerTrimmed.startsWith("suggested") ||
+            lowerTrimmed.includes("age") || 
+            lowerTrimmed.includes("size") || 
+            lowerTrimmed.includes("speed") ||
+            lowerTrimmed.includes("language") ||
+            lowerTrimmed.includes("ability score") ||
+            lowerTrimmed.includes("proficiency") ||
+            lowerTrimmed.includes("at ") ||
+            lowerTrimmed.includes("when ") ||
+            lowerTrimmed.includes("starting at");
+          
+          if (!isDescription && trimmed.length > 5) {
+            if (!features.includes(trimmed)) {
+              features.push(trimmed);
+            }
           }
         }
       }
     } else if (entry && typeof entry === "object") {
-      // Object with name property
+      // Object with name property - ONLY take the name, NEVER descriptions
       if (entry.name) {
         const name = entry.name.toLowerCase();
-        // Skip non-feature entries
+        // Skip non-feature entries and description-like names
         if (!name.includes("age") && !name.includes("size") && 
             !name.includes("speed") && !name.includes("language") &&
             !name.includes("ability score") && !name.includes("proficiency") &&
             !name.includes("skill") && !name.includes("tool") &&
-            !name.includes("equipment") && !name.includes("starting")) {
-          if (!features.includes(entry.name)) {
-            features.push(entry.name);
+            !name.includes("equipment") && !name.includes("starting") &&
+            !name.includes("suggested characteristics")) {
+          // Remove "Feature: " prefix if present (for background features)
+          let featureName = entry.name;
+          if (featureName.startsWith("Feature: ")) {
+            featureName = featureName.substring("Feature: ".length).trim();
+          }
+          // ONLY add the name, NEVER any description text from entries
+          if (!features.includes(featureName)) {
+            features.push(featureName);
           }
         }
       }
-      // Recursively check entries property
-      if (entry.entries && Array.isArray(entry.entries)) {
+      // Recursively check entries property for nested feature names only
+      // But skip if this entry already has a name (to avoid duplicating with descriptions)
+      if (entry.entries && Array.isArray(entry.entries) && !entry.name) {
         const nestedFeatures = extractFeatureNames(entry.entries, level);
         nestedFeatures.forEach((f) => {
           if (!features.includes(f)) {
@@ -428,9 +506,14 @@ async function loadFeatures(character) {
                   const name = entry.name.toLowerCase();
                   // Include feature entries
                   if (name.includes("feature")) {
-                    console.log(`[PDF Export] Found background feature: ${entry.name}`);
-                    if (!features.includes(entry.name)) {
-                      features.push(entry.name);
+                    // Remove "Feature: " prefix if present
+                    let featureName = entry.name;
+                    if (featureName.startsWith("Feature: ")) {
+                      featureName = featureName.substring("Feature: ".length).trim();
+                    }
+                    console.log(`[PDF Export] Found background feature: ${entry.name} -> ${featureName}`);
+                    if (!features.includes(featureName)) {
+                      features.push(featureName);
                     }
                   }
                 }
@@ -470,18 +553,11 @@ async function loadFeatures(character) {
   console.log(`[PDF Export] Total features loaded: ${features.length}`);
   if (features.length > 0) {
     console.log(`[PDF Export] Features list:`, features);
-    // Clean up features: remove {@...} tags and format properly
+    // Clean up features: format special tags properly
     const cleanedFeatures = features.map(feature => {
       if (typeof feature === "string") {
-        // Remove {@...} tags (e.g., {@spell minor illusion}, {@item sword}, etc.)
-        let cleaned = feature.replace(/{@[^}]+}/g, (match) => {
-          // Extract text from tags like {@spell minor illusion} -> "minor illusion"
-          const textMatch = match.match(/{@\w+\s+([^|}]+)/);
-          return textMatch ? textMatch[1].trim() : "";
-        });
-        // Clean up any remaining tags
-        cleaned = cleaned.replace(/{@[^}]+}/g, "").trim();
-        return cleaned;
+        // Use formatSpecialTags to properly parse all tag types
+        return formatSpecialTags(feature);
       }
       return feature;
     }).filter(f => f && f.length > 0); // Remove empty features
@@ -911,51 +987,113 @@ async function exportCharacterToPDF(character) {
   
   // ========== SPELLS ==========
   console.log(`[PDF Export] Spells check - character.spells:`, character.spells ? "exists" : "null");
-  if (character.spells && character.className) {
-    const classNameLower = character.className.toLowerCase();
+  // Check if character has any spells (from class OR race)
+  const hasSpells = character.spells && (
+    (character.spells.cantrips && character.spells.cantrips.length > 0) ||
+    Object.keys(character.spells).some(key => key.startsWith("level") && character.spells[key] && character.spells[key].length > 0)
+  );
+  
+  if (hasSpells) {
+    const classNameLower = character.className ? character.className.toLowerCase() : "";
     const isSpellcaster = ["wizard", "sorcerer", "warlock", "cleric", "druid", 
                           "bard", "ranger", "paladin"].includes(classNameLower);
-    console.log(`[PDF Export] Is spellcaster: ${isSpellcaster} (class: ${classNameLower})`);
+    console.log(`[PDF Export] Has spells: ${hasSpells}, Is spellcaster: ${isSpellcaster} (class: ${classNameLower})`);
     
-    if (isSpellcaster) {
-      console.log(`[PDF Export] Processing spells for ${character.className}`);
-      // Use spellcasting stats from calculatedStats if available
-      const spellcastingAbility = stats.spellcastingAbility || "int";
-      const spellSaveDC = stats.spellSaveDC;
-      const spellAttackBonus = stats.spellAttackBonus;
-      const spellSlots = stats.spellSlots;
+    // Export spells (from class OR race/other sources)
+    console.log(`[PDF Export] Processing spells${character.className ? ` for ${character.className}` : ""}`);
+    
+    // Determine spellcasting ability
+    let spellcastingAbility = stats.spellcastingAbility;
+    let spellSaveDC = stats.spellSaveDC;
+    let spellAttackBonus = stats.spellAttackBonus;
+    const spellSlots = stats.spellSlots;
+    const proficiencyBonus = stats.proficiencyBonus || Math.ceil((character.level || 1) / 4) + 1;
+    
+    // If not a spellcaster, try to get spellcasting ability from race spells
+    if (!isSpellcaster && !spellcastingAbility) {
+      // Default to Charisma for most race spells (Tiefling, etc.)
+      spellcastingAbility = "cha";
+      console.log(`[PDF Export] Character is not a spellcaster, using default spellcasting ability: ${spellcastingAbility}`);
       
-      setField(form, "Spellcasting Class 2", character.className);
-      
-      // Fill spellcasting stats
-      if (spellcastingAbility) {
-        const abilityName = spellcastingAbility.toUpperCase().substring(0, 3); // "cha" -> "CHA"
-        setField(form, "SpellcastingAbility 2", abilityName);
-        console.log(`[PDF Export] Set SpellcastingAbility 2 = ${abilityName}`);
-      }
-      if (spellSaveDC !== undefined && spellSaveDC !== null) {
-        setField(form, "SpellSaveDC  2", spellSaveDC.toString());
-        console.log(`[PDF Export] Set SpellSaveDC  2 = ${spellSaveDC}`);
-      }
-      if (spellAttackBonus !== undefined && spellAttackBonus !== null) {
-        setField(form, "SpellAtkBonus 2", formatMod(spellAttackBonus));
-        console.log(`[PDF Export] Set SpellAtkBonus 2 = ${formatMod(spellAttackBonus)}`);
-      }
-      
-      // Fill spell slots from calculatedStats
-      if (spellSlots) {
-        for (let level = 1; level <= 9; level++) {
-          const levelKey = `level${level}`;
-          const slotData = spellSlots[levelKey];
-          if (slotData) {
-            const fieldIndex = 18 + level; // 19-27
-            setField(form, `SlotsTotal ${fieldIndex}`, slotData.total || 0);
-            setField(form, `SlotsRemaining ${fieldIndex}`, (slotData.total || 0) - (slotData.used || 0));
+      // Try to load race data to get actual spellcasting ability
+      if (character.race) {
+        try {
+          const raceResponse = await httpRequest(`http://localhost:4000/api/data/races/${character.race.toLowerCase()}`);
+          if (raceResponse.ok) {
+            const raceData = await raceResponse.json();
+            if (raceData.additionalSpells && raceData.additionalSpells.length > 0) {
+              const firstSpellData = raceData.additionalSpells[0];
+              if (firstSpellData.ability) {
+                if (typeof firstSpellData.ability === "string") {
+                  spellcastingAbility = firstSpellData.ability.toLowerCase();
+                } else if (Array.isArray(firstSpellData.ability.choose)) {
+                  // If it's a choice, default to first option (usually cha for Tiefling)
+                  spellcastingAbility = firstSpellData.ability.choose[0].toLowerCase();
+                }
+                console.log(`[PDF Export] Found spellcasting ability from race: ${spellcastingAbility}`);
+              }
+            }
           }
+        } catch (e) {
+          console.error(`[PDF Export] Error loading race data for spellcasting ability:`, e);
         }
-      } else {
-        // Fallback: calculate spell slots
-        const calculateSpellSlots = (className, level) => {
+      }
+    }
+    
+    // Calculate spellcasting stats according to PHB rules:
+    // Spell Save DC = 8 + spellcasting ability modifier + proficiency bonus
+    // Spell Attack Bonus = spellcasting ability modifier + proficiency bonus
+    if (!spellSaveDC || !spellAttackBonus) {
+      const abilityKey = spellcastingAbility || "cha";
+      const abilityScore = character.abilityScores?.[abilityKey] || 10;
+      const abilityMod = Math.floor((abilityScore - 10) / 2);
+      
+      if (!spellSaveDC) {
+        spellSaveDC = 8 + abilityMod + proficiencyBonus;
+        console.log(`[PDF Export] Calculated Spell Save DC: 8 + ${abilityMod} (${abilityKey} mod) + ${proficiencyBonus} (prof) = ${spellSaveDC}`);
+      }
+      
+      if (spellAttackBonus === undefined || spellAttackBonus === null) {
+        spellAttackBonus = abilityMod + proficiencyBonus;
+        console.log(`[PDF Export] Calculated Spell Attack Bonus: ${abilityMod} (${abilityKey} mod) + ${proficiencyBonus} (prof) = ${spellAttackBonus}`);
+      }
+    }
+    
+    // Set spellcasting class if character is a spellcaster
+    if (isSpellcaster && character.className) {
+      setField(form, "Spellcasting Class 2", character.className);
+    }
+    
+    // Always fill spellcasting stats if character has spells
+    if (spellcastingAbility) {
+      const abilityName = spellcastingAbility.toUpperCase().substring(0, 3); // "cha" -> "CHA"
+      setField(form, "SpellcastingAbility 2", abilityName);
+      console.log(`[PDF Export] Set SpellcastingAbility 2 = ${abilityName}`);
+    }
+    if (spellSaveDC !== undefined && spellSaveDC !== null) {
+      setField(form, "SpellSaveDC  2", spellSaveDC.toString());
+      console.log(`[PDF Export] Set SpellSaveDC  2 = ${spellSaveDC}`);
+    }
+    if (spellAttackBonus !== undefined && spellAttackBonus !== null) {
+      setField(form, "SpellAtkBonus 2", formatMod(spellAttackBonus));
+      console.log(`[PDF Export] Set SpellAtkBonus 2 = ${formatMod(spellAttackBonus)}`);
+    }
+    
+    // Fill spell slots - always fill if character is a spellcaster, otherwise leave empty (race spells don't use slots)
+    if (isSpellcaster) {
+        if (spellSlots) {
+          for (let level = 1; level <= 9; level++) {
+            const levelKey = `level${level}`;
+            const slotData = spellSlots[levelKey];
+            if (slotData) {
+              const fieldIndex = 18 + level; // 19-27
+              setField(form, `SlotsTotal ${fieldIndex}`, slotData.total || 0);
+              setField(form, `SlotsRemaining ${fieldIndex}`, (slotData.total || 0) - (slotData.used || 0));
+            }
+          }
+        } else {
+          // Fallback: calculate spell slots
+          const calculateSpellSlots = (className, level) => {
           const slots = {1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0, 8:0, 9:0};
           
           if (["wizard", "cleric", "druid", "bard", "sorcerer"].includes(className)) {
@@ -1007,6 +1145,7 @@ async function exportCharacterToPDF(character) {
           setField(form, `SlotsRemaining ${fieldIndex}`, slots);
         }
       }
+    }
       
       // Individual spells
       const allSpells = [];
@@ -1154,15 +1293,40 @@ async function exportCharacterToPDF(character) {
       }
       
       console.log(`[PDF Export] Successfully set ${spellsSet} spells into PDF`);
-    } else {
-      console.log(`[PDF Export] Not a spellcaster class or no spells`);
-    }
   } else {
-    console.log(`[PDF Export] No spells data or class name`);
+    console.log(`[PDF Export] No spells data found`);
   }
   
   // ========== FEATURES & TRAITS ==========
   const features = await loadFeatures(character);
+  
+  // Add subclass features from calculatedStats if available (ONLY NAMES, NO DESCRIPTIONS)
+  if (stats.subclassFeatures && Array.isArray(stats.subclassFeatures)) {
+    stats.subclassFeatures.forEach((feature) => {
+      if (feature && feature.name) {
+        // Only add the feature name, no descriptions
+        let featureText = feature.name;
+        if (feature.level) {
+          featureText = `Level ${feature.level}: ${featureText}`;
+        }
+        // DO NOT add entries/descriptions - just the name
+        if (!features.includes(featureText)) {
+          features.push(featureText);
+        }
+      }
+    });
+    console.log(`[PDF Export] Added ${stats.subclassFeatures.length} subclass features from calculatedStats (names only)`);
+  }
+  
+  // Add resistances to features
+  if (stats.resistances && Array.isArray(stats.resistances) && stats.resistances.length > 0) {
+    const resistancesText = stats.resistances
+      .map(r => r.charAt(0).toUpperCase() + r.slice(1) + " Resistance")
+      .join(", ");
+    features.push(`Damage Resistances: ${resistancesText}`);
+    console.log(`[PDF Export] Added resistances: ${resistancesText}`);
+  }
+  
   if (features.length > 0) {
     // Join features with double newline for better readability in PDF
     const featuresText = features.join("\n\n");
@@ -1193,18 +1357,39 @@ async function exportCharacterToPDF(character) {
   const languages = [];
   
   try {
+    // Load from calculatedStats first (most accurate)
+    if (stats.toolProficiencies && Array.isArray(stats.toolProficiencies)) {
+      stats.toolProficiencies.forEach((tool) => {
+        const formatted = formatSpecialTags(tool);
+        if (formatted && !proficiencies.includes(formatted)) {
+          proficiencies.push(formatted);
+        }
+      });
+      console.log(`[PDF Export] Loaded ${stats.toolProficiencies.length} tool proficiencies from calculatedStats`);
+    }
+    
+    if (stats.languages && Array.isArray(stats.languages)) {
+      stats.languages.forEach((lang) => {
+        const formatted = formatSpecialTags(lang);
+        if (formatted && !languages.includes(formatted)) {
+          languages.push(formatted);
+        }
+      });
+      console.log(`[PDF Export] Loaded ${stats.languages.length} languages from calculatedStats`);
+    }
+    
     // Load from character.proficiencies (already stored - includes armor, weapons, tools, skills)
     if (character.proficiencies && Array.isArray(character.proficiencies)) {
       character.proficiencies.forEach((prof) => {
         if (prof && typeof prof === "string" && prof.trim()) {
-          const trimmed = prof.trim();
+          const trimmed = formatSpecialTags(prof.trim());
           // Skip skills (they're handled separately in skills section)
           const skillNames = ["acrobatics", "athletics", "deception", "history", "insight", 
                              "intimidation", "investigation", "medicine", "nature", "perception",
                              "performance", "persuasion", "religion", "sleight of hand", "stealth", "survival",
-                             "animal handling", "arcana"];
+                             "animal handling", "arcana", "saving throws"];
           const isSkill = skillNames.some(skill => trimmed.toLowerCase().includes(skill.toLowerCase()));
-          if (!isSkill && !proficiencies.includes(trimmed)) {
+          if (!isSkill && trimmed && !proficiencies.includes(trimmed)) {
             proficiencies.push(trimmed);
           }
         }
@@ -1239,8 +1424,8 @@ async function exportCharacterToPDF(character) {
             if (classInfo.startingProficiencies.armor) {
               classInfo.startingProficiencies.armor.forEach((armor) => {
                 if (typeof armor === "string") {
-                  // Remove {@...} tags and clean up
-                  let armorName = armor.replace(/{@[^}]+}/g, "").trim();
+                  // Format special tags and clean up
+                  let armorName = formatSpecialTags(armor).trim();
                   // Capitalize first letter
                   if (armorName) {
                     armorName = armorName.charAt(0).toUpperCase() + armorName.slice(1);
@@ -1249,9 +1434,12 @@ async function exportCharacterToPDF(character) {
                     }
                   }
                 } else if (armor && typeof armor === "object" && armor.proficiency) {
-                  const profName = armor.proficiency.charAt(0).toUpperCase() + armor.proficiency.slice(1);
-                  if (!proficiencies.includes(profName)) {
-                    proficiencies.push(profName);
+                  const profName = formatSpecialTags(armor.proficiency).trim();
+                  if (profName) {
+                    const formatted = profName.charAt(0).toUpperCase() + profName.slice(1);
+                    if (!proficiencies.includes(formatted)) {
+                      proficiencies.push(formatted);
+                    }
                   }
                 }
               });
@@ -1261,8 +1449,8 @@ async function exportCharacterToPDF(character) {
               console.log(`[PDF Export] Found ${classInfo.startingProficiencies.weapons.length} weapon proficiencies`);
               classInfo.startingProficiencies.weapons.forEach((weapon) => {
                 if (typeof weapon === "string") {
-                  // Remove {@...} tags and clean up
-                  let weaponName = weapon.replace(/{@[^}]+}/g, "").trim();
+                  // Format special tags and clean up
+                  let weaponName = formatSpecialTags(weapon).trim();
                   // Handle special cases like "simple", "martial"
                   if (weaponName === "simple") {
                     weaponName = "Simple weapons";
@@ -1283,8 +1471,8 @@ async function exportCharacterToPDF(character) {
             if (classInfo.startingProficiencies.tools) {
               classInfo.startingProficiencies.tools.forEach((tool) => {
                 if (typeof tool === "string") {
-                  // Remove {@...} tags and clean up
-                  let toolName = tool.replace(/{@[^}]+}/g, "").trim();
+                  // Format special tags and clean up
+                  let toolName = formatSpecialTags(tool).trim();
                   // Remove "any one type of" or similar prefixes
                   toolName = toolName.replace(/^any\s+(one\s+)?(type\s+of\s+)?/i, "").trim();
                   if (toolName) {
@@ -1342,14 +1530,15 @@ async function exportCharacterToPDF(character) {
           if (raceInfo.languageProficiencies) {
             raceInfo.languageProficiencies.forEach((lang) => {
               if (typeof lang === "string") {
-                const langName = lang.replace(/{@[^}]+}/g, "").trim();
+                const langName = formatSpecialTags(lang).trim();
                 if (langName && !langName.toLowerCase().includes("any") && !languages.includes(langName)) {
                   languages.push(langName);
                 }
               } else if (lang && typeof lang === "object" && lang.standard) {
                 lang.standard.forEach((stdLang) => {
-                  if (stdLang && !languages.includes(stdLang)) {
-                    languages.push(stdLang);
+                  const formatted = formatSpecialTags(stdLang).trim();
+                  if (formatted && !languages.includes(formatted)) {
+                    languages.push(formatted);
                   }
                 });
               }
@@ -1358,10 +1547,16 @@ async function exportCharacterToPDF(character) {
           // Tool proficiencies from race
           if (raceInfo.toolProficiencies) {
             raceInfo.toolProficiencies.forEach((toolProf) => {
-              if (toolProf && typeof toolProf === "object") {
+              if (typeof toolProf === "string") {
+                const formatted = formatSpecialTags(toolProf).trim();
+                if (formatted && !proficiencies.includes(formatted)) {
+                  proficiencies.push(formatted);
+                }
+              } else if (toolProf && typeof toolProf === "object") {
                 Object.keys(toolProf).forEach((toolName) => {
-                  if (toolName && !proficiencies.includes(toolName)) {
-                    proficiencies.push(toolName);
+                  const formatted = formatSpecialTags(toolName).trim();
+                  if (formatted && !proficiencies.includes(formatted)) {
+                    proficiencies.push(formatted);
                   }
                 });
               }
@@ -1386,14 +1581,15 @@ async function exportCharacterToPDF(character) {
           if (subraceData.languageProficiencies) {
             subraceData.languageProficiencies.forEach((lang) => {
               if (typeof lang === "string") {
-                const langName = lang.replace(/{@[^}]+}/g, "").trim();
+                const langName = formatSpecialTags(lang).trim();
                 if (langName && !langName.toLowerCase().includes("any") && !languages.includes(langName)) {
                   languages.push(langName);
                 }
               } else if (lang && typeof lang === "object" && lang.standard) {
                 lang.standard.forEach((stdLang) => {
-                  if (stdLang && !languages.includes(stdLang)) {
-                    languages.push(stdLang);
+                  const formatted = formatSpecialTags(stdLang).trim();
+                  if (formatted && !languages.includes(formatted)) {
+                    languages.push(formatted);
                   }
                 });
               }
@@ -1402,10 +1598,16 @@ async function exportCharacterToPDF(character) {
           // Tool proficiencies from subrace
           if (subraceData.toolProficiencies) {
             subraceData.toolProficiencies.forEach((toolProf) => {
-              if (toolProf && typeof toolProf === "object") {
+              if (typeof toolProf === "string") {
+                const formatted = formatSpecialTags(toolProf).trim();
+                if (formatted && !proficiencies.includes(formatted)) {
+                  proficiencies.push(formatted);
+                }
+              } else if (toolProf && typeof toolProf === "object") {
                 Object.keys(toolProf).forEach((toolName) => {
-                  if (toolName && !proficiencies.includes(toolName)) {
-                    proficiencies.push(toolName);
+                  const formatted = formatSpecialTags(toolName).trim();
+                  if (formatted && !proficiencies.includes(formatted)) {
+                    proficiencies.push(formatted);
                   }
                 });
               }
@@ -1441,14 +1643,15 @@ async function exportCharacterToPDF(character) {
             if (bgInfo.languageProficiencies) {
             bgInfo.languageProficiencies.forEach((lang) => {
               if (typeof lang === "string") {
-                const langName = lang.replace(/{@[^}]+}/g, "").trim();
+                const langName = formatSpecialTags(lang).trim();
                 if (langName && !langName.toLowerCase().includes("any") && !languages.includes(langName)) {
                   languages.push(langName);
                 }
               } else if (lang && typeof lang === "object" && lang.standard) {
                 lang.standard.forEach((stdLang) => {
-                  if (stdLang && !languages.includes(stdLang)) {
-                    languages.push(stdLang);
+                  const formatted = formatSpecialTags(stdLang).trim();
+                  if (formatted && !languages.includes(formatted)) {
+                    languages.push(formatted);
                   }
                 });
               }
@@ -1457,10 +1660,16 @@ async function exportCharacterToPDF(character) {
           // Tool proficiencies from background
           if (bgInfo.toolProficiencies) {
             bgInfo.toolProficiencies.forEach((toolProf) => {
-              if (toolProf && typeof toolProf === "object") {
+              if (typeof toolProf === "string") {
+                const formatted = formatSpecialTags(toolProf).trim();
+                if (formatted && !proficiencies.includes(formatted)) {
+                  proficiencies.push(formatted);
+                }
+              } else if (toolProf && typeof toolProf === "object") {
                 Object.keys(toolProf).forEach((toolName) => {
-                  if (toolName && !proficiencies.includes(toolName)) {
-                    proficiencies.push(toolName);
+                  const formatted = formatSpecialTags(toolName).trim();
+                  if (formatted && !proficiencies.includes(formatted)) {
+                    proficiencies.push(formatted);
                   }
                 });
               }
@@ -1509,12 +1718,152 @@ async function exportCharacterToPDF(character) {
     console.error("[PDF Export] Error loading proficiencies and languages:", error);
   }
   
-  // Combine proficiencies and languages
-  const allProfsAndLangs = [...proficiencies, ...languages];
-  if (allProfsAndLangs.length > 0) {
-    const profsText = allProfsAndLangs.join(", ");
-    console.log(`[PDF Export] Final Proficiencies & Languages (${allProfsAndLangs.length} items):`, allProfsAndLangs);
-    console.log(`[PDF Export] Combined text: "${profsText}"`);
+  // Helper function to check if item already exists (case-insensitive)
+  const itemExists = (array, item) => {
+    const itemLower = item.toLowerCase().trim();
+    return array.some(existing => existing.toLowerCase().trim() === itemLower);
+  };
+  
+  // Helper function to add item if not exists (case-insensitive)
+  const addIfNotExists = (array, item) => {
+    if (!itemExists(array, item)) {
+      array.push(item.trim());
+    }
+  };
+  
+  // Categorize and format proficiencies
+  const categorized = {
+    languages: [],
+    weapons: [],
+    tools: [],
+    armor: [],
+    savingThrows: [],
+    other: []
+  };
+  
+  // Add languages (deduplicate case-insensitive)
+  languages.forEach(lang => {
+    const formatted = formatSpecialTags(lang).trim();
+    if (formatted) {
+      addIfNotExists(categorized.languages, formatted);
+    }
+  });
+  
+  // Categorize proficiencies
+  proficiencies.forEach((prof) => {
+    const formatted = formatSpecialTags(prof).trim();
+    if (!formatted) return;
+    
+    const lower = formatted.toLowerCase();
+    
+    // Check for languages (should already be in languages array, but double-check)
+    if (itemExists(categorized.languages, formatted)) {
+      return; // Skip, already in languages
+    }
+    
+    // Check for weapons
+    if (lower.includes("weapon") || lower.includes("sword") || lower.includes("dagger") || 
+        lower.includes("axe") || lower.includes("bow") || lower.includes("crossbow") ||
+        lower.includes("mace") || lower.includes("spear") || lower.includes("staff") ||
+        lower.includes("simple") || lower.includes("martial") ||
+        lower === "dart" || lower === "sling" || lower === "club" || lower === "handaxe" ||
+        lower === "javelin" || lower === "light hammer" || lower === "quarterstaff" ||
+        lower === "sickle" || lower === "unarmed strike" || lower === "light crossbow" ||
+        lower === "shortbow" || lower === "blowgun" || lower === "hand crossbow" ||
+        lower === "heavy crossbow" || lower === "longbow" || lower === "net" ||
+        lower === "battleaxe" || lower === "flail" || lower === "glaive" ||
+        lower === "greataxe" || lower === "greatsword" || lower === "halberd" ||
+        lower === "lance" || lower === "longsword" || lower === "maul" ||
+        lower === "morningstar" || lower === "pike" || lower === "rapier" ||
+        lower === "scimitar" || lower === "shortsword" || lower === "trident" ||
+        lower === "war pick" || lower === "warhammer" || lower === "whip" ||
+        lower === "greatclub") {
+      // Extract weapon name (remove "weapon" suffix if present)
+      let weaponName = formatted;
+      if (lower.endsWith(" weapons")) {
+        weaponName = formatted.replace(/\s+weapons?$/i, "");
+      }
+      // Capitalize first letter for consistency
+      weaponName = weaponName.charAt(0).toUpperCase() + weaponName.slice(1);
+      addIfNotExists(categorized.weapons, weaponName);
+    }
+    // Check for armor
+    else if (lower.includes("armor") || lower.includes("shield") || 
+             lower === "light" || lower === "medium" || lower === "heavy") {
+      let armorName = formatted;
+      if (lower.endsWith(" armor")) {
+        armorName = formatted.replace(/\s+armor$/i, "");
+      }
+      // Capitalize first letter for consistency
+      armorName = armorName.charAt(0).toUpperCase() + armorName.slice(1);
+      addIfNotExists(categorized.armor, armorName);
+    }
+    // Check for saving throws
+    else if (lower.includes("saving throw")) {
+      const abilityName = formatted.replace(/\s+saving\s+throws?$/i, "");
+      const capitalized = abilityName.charAt(0).toUpperCase() + abilityName.slice(1);
+      addIfNotExists(categorized.savingThrows, capitalized);
+    }
+    // Check for tools (musical instruments, artisan's tools, gaming sets, etc.)
+    else if (lower.includes("tool") || lower.includes("instrument") || 
+             lower.includes("kit") || lower.includes("set") ||
+             lower.includes("disguise") || lower.includes("forgery") ||
+             lower.includes("herbalism") || lower.includes("navigator") ||
+             lower.includes("poisoner") || lower.includes("thieves") ||
+             lower.includes("vehicles")) {
+      const capitalized = formatted.charAt(0).toUpperCase() + formatted.slice(1);
+      addIfNotExists(categorized.tools, capitalized);
+    }
+    // Other proficiencies
+    else {
+      const capitalized = formatted.charAt(0).toUpperCase() + formatted.slice(1);
+      addIfNotExists(categorized.other, capitalized);
+    }
+  });
+  
+  // Build formatted text with categories
+  const formattedSections = [];
+  
+  if (categorized.languages.length > 0) {
+    categorized.languages.forEach(lang => {
+      formattedSections.push(`Language: ${lang}`);
+    });
+  }
+  
+  if (categorized.weapons.length > 0) {
+    categorized.weapons.forEach(weapon => {
+      formattedSections.push(`Weapon: ${weapon}`);
+    });
+  }
+  
+  if (categorized.armor.length > 0) {
+    categorized.armor.forEach(armor => {
+      formattedSections.push(`Armor: ${armor}`);
+    });
+  }
+  
+  if (categorized.tools.length > 0) {
+    categorized.tools.forEach(tool => {
+      formattedSections.push(`Tool: ${tool}`);
+    });
+  }
+  
+  if (categorized.savingThrows.length > 0) {
+    categorized.savingThrows.forEach(st => {
+      formattedSections.push(`Saving Throw: ${st}`);
+    });
+  }
+  
+  if (categorized.other.length > 0) {
+    categorized.other.forEach(other => {
+      formattedSections.push(`Other: ${other}`);
+    });
+  }
+  
+  if (formattedSections.length > 0) {
+    const profsText = formattedSections.join("\n");
+    console.log(`[PDF Export] Final Proficiencies & Languages (${formattedSections.length} items):`);
+    console.log(`[PDF Export] Formatted text:\n${profsText}`);
     setField(form, "ProficienciesLang", profsText);
     // Try alternative field names
     setField(form, "ProficienciesLang ", profsText); // With trailing space

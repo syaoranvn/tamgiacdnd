@@ -85,7 +85,39 @@ export default function Step6Calculations({ character, onUpdate }: Step6Calculat
               return null;
             })
         : Promise.resolve(null),
-    ]).then(async ([classData, raceData, subraceData, backgroundData]) => {
+      character.subclass && character.className
+        ? Promise.all([
+            // Load subclass list
+            fetch(apiUrl(`api/data/classes/${character.className}/subclasses`))
+              .then(async (r) => {
+                if (!r.ok) {
+                  console.error(`Failed to load subclasses:`, r.status);
+                  return null;
+                }
+                const subclasses = await r.json();
+                if (character.subclass) {
+                  return subclasses.find((s: any) => s.name === character.subclass) || null;
+                }
+                return null;
+              })
+              .catch((err) => {
+                console.error(`Error fetching subclasses:`, err);
+                return null;
+              }),
+            // Load full class data to get subclassFeature array
+            fetch(apiUrl(`api/data/classes/${character.className.toLowerCase()}`))
+              .then(async (r) => {
+                if (!r.ok) return null;
+                return r.json();
+              })
+              .catch(() => null)
+          ]).then(([subclassData, classData]) => {
+            return { subclassData, classData };
+          })
+        : Promise.resolve({ subclassData: null, classData: null }),
+    ]).then(async ([classData, raceData, subraceData, backgroundData, subclassInfo]) => {
+      const subclassData = subclassInfo?.subclassData || null;
+      const fullClassData = subclassInfo?.classData || classData;
       console.log("Step6Calculations: Loaded data", {
         classData: classData ? "✓" : "✗",
         raceData: raceData ? "✓" : "✗",
@@ -129,16 +161,133 @@ export default function Step6Calculations({ character, onUpdate }: Step6Calculat
         }
         
         const expandedEquipment = await expandEquipment(allEquipment);
+        
+        // Load and filter subclass features based on level and choices
+        let activeSubclassFeatures: any[] = [];
+        if (character.subclass && fullClassData?.subclassFeature && character.subclassChoices) {
+          const subclassShortName = subclassData?.shortName || subclassData?.name;
+          const characterLevel = character.level || 1;
+          
+          // Filter subclass features by subclass and level
+          activeSubclassFeatures = fullClassData.subclassFeature.filter((sf: any) => {
+            // Check if feature belongs to selected subclass
+            const matchesSubclass = sf.className === character.className && 
+                                   (sf.subclassShortName === subclassShortName || 
+                                    sf.subclass === subclassShortName ||
+                                    sf.subclass === character.subclass);
+            
+            // Check if feature is available at current level
+            const matchesLevel = !sf.level || sf.level <= characterLevel;
+            
+            return matchesSubclass && matchesLevel;
+          });
+          
+          console.log("[Step6Calculations] Active subclass features:", activeSubclassFeatures);
+        }
+        
         const calculatedStats = calculateStats(
           character,
           classData as Class,
           raceData as Race,
           subraceData,
           backgroundData as Background | null,
-          expandedEquipment
+          expandedEquipment,
+          activeSubclassFeatures
         );
 
         console.log("Step6Calculations: Calculated stats", calculatedStats);
+        
+        // Collect all proficiencies (skills, tools, languages, etc.) into character.proficiencies array
+        const allProficiencies: string[] = [];
+        
+        // Add skill proficiencies
+        Object.entries(calculatedStats.skills || {}).forEach(([skill, data]) => {
+          if (data.proficient) {
+            allProficiencies.push(skill);
+          }
+        });
+        
+        // Add tool proficiencies
+        if (calculatedStats.toolProficiencies) {
+          calculatedStats.toolProficiencies.forEach(tool => {
+            if (!allProficiencies.includes(tool)) {
+              allProficiencies.push(tool);
+            }
+          });
+        }
+        
+        // Add languages
+        if (calculatedStats.languages) {
+          calculatedStats.languages.forEach(lang => {
+            if (!allProficiencies.includes(lang)) {
+              allProficiencies.push(lang);
+            }
+          });
+        }
+        
+        // Add saving throw proficiencies
+        Object.entries(calculatedStats.savingThrows || {}).forEach(([ability, data]) => {
+          if (data.proficient) {
+            const abilityName = ability.charAt(0).toUpperCase() + ability.slice(1) + " Saving Throws";
+            if (!allProficiencies.includes(abilityName)) {
+              allProficiencies.push(abilityName);
+            }
+          }
+        });
+        
+        // Add weapon proficiencies from race
+        if (raceData.weaponProficiencies) {
+          raceData.weaponProficiencies.forEach((weapon: string) => {
+            if (!allProficiencies.includes(weapon)) {
+              allProficiencies.push(weapon);
+            }
+          });
+        }
+        
+        // Add armor proficiencies from race
+        if (raceData.armorProficiencies) {
+          raceData.armorProficiencies.forEach((armor: string) => {
+            if (!allProficiencies.includes(armor)) {
+              allProficiencies.push(armor);
+            }
+          });
+        }
+        
+        // Add weapon proficiencies from subrace
+        if (subraceData?.weaponProficiencies) {
+          subraceData.weaponProficiencies.forEach((weapon: string) => {
+            if (!allProficiencies.includes(weapon)) {
+              allProficiencies.push(weapon);
+            }
+          });
+        }
+        
+        // Add armor proficiencies from subrace
+        if (subraceData?.armorProficiencies) {
+          subraceData.armorProficiencies.forEach((armor: string) => {
+            if (!allProficiencies.includes(armor)) {
+              allProficiencies.push(armor);
+            }
+          });
+        }
+        
+        // Add weapon proficiencies from class
+        if (classData.startingProficiencies?.weapons) {
+          classData.startingProficiencies.weapons.forEach((weapon: string) => {
+            if (!allProficiencies.includes(weapon)) {
+              allProficiencies.push(weapon);
+            }
+          });
+        }
+        
+        // Add armor proficiencies from class
+        if (classData.startingProficiencies?.armor) {
+          classData.startingProficiencies.armor.forEach((armor: string) => {
+            if (!allProficiencies.includes(armor)) {
+              allProficiencies.push(armor);
+            }
+          });
+        }
         
         // Create a hash of the calculated stats to avoid unnecessary updates
         const statsHash = JSON.stringify(calculatedStats);
@@ -146,7 +295,11 @@ export default function Step6Calculations({ character, onUpdate }: Step6Calculat
         // Only update if stats have actually changed
         if (lastCalculatedRef.current !== statsHash) {
           lastCalculatedRef.current = statsHash;
-        onUpdate({ calculatedStats });
+          onUpdate({ 
+            calculatedStats,
+            proficiencies: allProficiencies,
+            subclassFeatures: activeSubclassFeatures.length > 0 ? activeSubclassFeatures : undefined
+          });
         }
         setIsCalculating(false);
       } catch (error) {
@@ -162,7 +315,7 @@ export default function Step6Calculations({ character, onUpdate }: Step6Calculat
     // Remove onUpdate and character.equipment from dependencies to avoid infinite loop
     // Equipment is handled inside the effect, and onUpdate should be stable
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [character.className, character.race, character.subrace, character.background, character.abilityScores, character.level, character.classSkillChoices, character.backgroundSkillChoices, character.raceSkillChoices]);
+  }, [character.className, character.race, character.subrace, character.background, character.abilityScores, character.level, character.classSkillChoices, character.backgroundSkillChoices, character.raceSkillChoices, character.raceToolChoice, character.backgroundToolChoices, character.subclassChoices, character.raceLanguageChoices, character.backgroundLanguageChoices]);
 
   const stats = character.calculatedStats;
   const formatModifier = (mod: number): string => {
@@ -278,7 +431,8 @@ function calculateStats(
   raceData: Race,
   subraceData: any,
   backgroundData: Background | null,
-  expandedEquipment: string[]
+  expandedEquipment: string[],
+  activeSubclassFeatures: any[] = []
 ): CalculatedStats {
   const level = character.level || 1;
   const abilityScores = character.abilityScores || {
@@ -321,6 +475,19 @@ function calculateStats(
 
   // AC (Armor Class) - Base 10 + Dex modifier, modified by armor
   let ac = 10 + modifiers.dex;
+  
+  // Check for subclass features that modify AC (e.g., Draconic Resilience: AC = 13 + Dex when unarmored)
+  let hasUnarmoredACBonus = false;
+  let unarmoredAC = 0;
+  activeSubclassFeatures.forEach((feature: any) => {
+    if (feature.name === "Draconic Resilience" || 
+        (feature.entries && Array.isArray(feature.entries) && 
+         feature.entries.some((e: any) => typeof e === "string" && e.includes("AC equals 13")))) {
+      // Draconic Resilience: AC = 13 + Dex when unarmored
+      hasUnarmoredACBonus = true;
+      unarmoredAC = 13 + modifiers.dex;
+    }
+  });
   
   // Check if character has armor equipped and adjust AC accordingly
   const armorItems = expandedEquipment.filter(item => {
@@ -383,6 +550,9 @@ function calculateStats(
   });
   if (hasMageArmor && armorItems.length === 0) {
     ac = 13 + modifiers.dex; // Mage Armor overrides unarmored AC
+  } else if (armorItems.length === 0 && hasUnarmoredACBonus) {
+    // Apply unarmored AC bonus from subclass feature if no armor
+    ac = unarmoredAC;
   }
 
   // Initiative = Dex modifier
@@ -538,19 +708,29 @@ function calculateStats(
     raceData.skillProficiencies.forEach((skillProf: any) => {
       if (typeof skillProf === "string") {
         const skillName = skillProf;
-        if (skills[skillName]) {
-          skills[skillName].proficient = true;
-          const ability = getSkillAbility(skillName);
-          skills[skillName].modifier = modifiers[ability] + proficiencyBonus;
+        // Normalize skill name (handle case and spaces)
+        const normalizedSkillName = skillName.toLowerCase().trim();
+        const skillKey = Object.keys(skills).find(
+          k => k.toLowerCase() === normalizedSkillName
+        );
+        if (skillKey) {
+          skills[skillKey].proficient = true;
+          const ability = getSkillAbility(skillKey);
+          skills[skillKey].modifier = modifiers[ability] + proficiencyBonus;
         }
       } else if (skillProf.any) {
         // Character should have chosen skills
         if (character.raceSkillChoices) {
           character.raceSkillChoices.forEach(skillName => {
-            if (skills[skillName]) {
-              skills[skillName].proficient = true;
-              const ability = getSkillAbility(skillName);
-              skills[skillName].modifier = modifiers[ability] + proficiencyBonus;
+            // Normalize skill name
+            const normalizedSkillName = skillName.toLowerCase().trim();
+            const skillKey = Object.keys(skills).find(
+              k => k.toLowerCase() === normalizedSkillName
+            );
+            if (skillKey) {
+              skills[skillKey].proficient = true;
+              const ability = getSkillAbility(skillKey);
+              skills[skillKey].modifier = modifiers[ability] + proficiencyBonus;
             }
           });
         }
@@ -561,12 +741,17 @@ function calculateStats(
   // Apply from character.raceSkillChoices (for races that require choices)
   if (character.raceSkillChoices) {
     character.raceSkillChoices.forEach(skillName => {
-      if (skills[skillName]) {
+      // Normalize skill name
+      const normalizedSkillName = skillName.toLowerCase().trim();
+      const skillKey = Object.keys(skills).find(
+        k => k.toLowerCase() === normalizedSkillName
+      );
+      if (skillKey) {
         // Only apply if not already proficient (avoid double counting)
-        if (!skills[skillName].proficient) {
-          skills[skillName].proficient = true;
-          const ability = getSkillAbility(skillName);
-          skills[skillName].modifier = modifiers[ability] + proficiencyBonus;
+        if (!skills[skillKey].proficient) {
+          skills[skillKey].proficient = true;
+          const ability = getSkillAbility(skillKey);
+          skills[skillKey].modifier = modifiers[ability] + proficiencyBonus;
         }
       }
     });
@@ -577,10 +762,15 @@ function calculateStats(
     subraceData.skillProficiencies.forEach((skillProf: any) => {
       if (typeof skillProf === "string") {
         const skillName = skillProf;
-        if (skills[skillName]) {
-          skills[skillName].proficient = true;
-          const ability = getSkillAbility(skillName);
-          skills[skillName].modifier = modifiers[ability] + proficiencyBonus;
+        // Normalize skill name
+        const normalizedSkillName = skillName.toLowerCase().trim();
+        const skillKey = Object.keys(skills).find(
+          k => k.toLowerCase() === normalizedSkillName
+        );
+        if (skillKey) {
+          skills[skillKey].proficient = true;
+          const ability = getSkillAbility(skillKey);
+          skills[skillKey].modifier = modifiers[ability] + proficiencyBonus;
         }
       }
     });
@@ -588,6 +778,185 @@ function calculateStats(
 
   // Passive Perception
   const passivePerception = 10 + (skills["Perception"]?.modifier || modifiers.wis);
+
+  // Tool Proficiencies
+  const toolProficiencies: string[] = [];
+  
+  // From race
+  if (raceData.toolProficiencies) {
+    raceData.toolProficiencies.forEach((toolProf: any) => {
+      if (typeof toolProf === "string") {
+        if (!toolProficiencies.includes(toolProf)) {
+          toolProficiencies.push(toolProf);
+        }
+      } else if (toolProf.choose) {
+        // Tool choice from race
+        if (character.raceToolChoice && !toolProficiencies.includes(character.raceToolChoice)) {
+          toolProficiencies.push(character.raceToolChoice);
+        }
+      }
+    });
+  }
+  
+  // From subrace
+  if (subraceData?.toolProficiencies) {
+    subraceData.toolProficiencies.forEach((toolProf: any) => {
+      if (typeof toolProf === "string") {
+        if (!toolProficiencies.includes(toolProf)) {
+          toolProficiencies.push(toolProf);
+        }
+      }
+    });
+  }
+  
+  // From class
+  if (classData.startingProficiencies?.tools) {
+    classData.startingProficiencies.tools.forEach((tool: string) => {
+      if (!toolProficiencies.includes(tool)) {
+        toolProficiencies.push(tool);
+      }
+    });
+  }
+  
+  // From background
+  if (backgroundData?.toolProficiencies) {
+    backgroundData.toolProficiencies.forEach((toolProf: any) => {
+      if (typeof toolProf === "string") {
+        if (!toolProficiencies.includes(toolProf)) {
+          toolProficiencies.push(toolProf);
+        }
+      } else if (toolProf.choose) {
+        // Tool choice from background
+        if (character.backgroundToolChoices) {
+          character.backgroundToolChoices.forEach((tool: string) => {
+            if (!toolProficiencies.includes(tool)) {
+              toolProficiencies.push(tool);
+            }
+          });
+        }
+      }
+    });
+  }
+
+  // Languages
+  const languages: string[] = [];
+  
+  // From race
+  if (raceData.languageProficiencies) {
+    raceData.languageProficiencies.forEach((langProf: any) => {
+      if (typeof langProf === "string") {
+        if (!languages.includes(langProf)) {
+          languages.push(langProf);
+        }
+      } else if (langProf.choose) {
+        // Language choice from race
+        if (character.raceLanguageChoices) {
+          character.raceLanguageChoices.forEach((lang: string) => {
+            if (!languages.includes(lang)) {
+              languages.push(lang);
+            }
+          });
+        }
+      }
+    });
+  }
+  
+  // From subrace
+  if (subraceData?.languageProficiencies) {
+    subraceData.languageProficiencies.forEach((langProf: any) => {
+      if (typeof langProf === "string") {
+        if (!languages.includes(langProf)) {
+          languages.push(langProf);
+        }
+      }
+    });
+  }
+  
+  // From background
+  if (backgroundData?.languageProficiencies) {
+    backgroundData.languageProficiencies.forEach((langProf: any) => {
+      if (typeof langProf === "string") {
+        if (!languages.includes(langProf)) {
+          languages.push(langProf);
+        }
+      } else if (langProf.choose) {
+        // Language choice from background
+        if (character.backgroundLanguageChoices) {
+          character.backgroundLanguageChoices.forEach((lang: string) => {
+            if (!languages.includes(lang)) {
+              languages.push(lang);
+            }
+          });
+        }
+      }
+    });
+  }
+
+  // Damage Resistances
+  const resistances: string[] = [];
+  
+  // From race
+  if (raceData.resist) {
+    if (Array.isArray(raceData.resist)) {
+      raceData.resist.forEach((res: string) => {
+        if (!resistances.includes(res)) {
+          resistances.push(res);
+        }
+      });
+    } else if (typeof raceData.resist === "string") {
+      if (!resistances.includes(raceData.resist)) {
+        resistances.push(raceData.resist);
+      }
+    }
+  }
+  
+  // From subrace
+  if (subraceData?.resist) {
+    if (Array.isArray(subraceData.resist)) {
+      subraceData.resist.forEach((res: string) => {
+        if (!resistances.includes(res)) {
+          resistances.push(res);
+        }
+      });
+    } else if (typeof subraceData.resist === "string") {
+      if (!resistances.includes(subraceData.resist)) {
+        resistances.push(subraceData.resist);
+      }
+    }
+  }
+  
+  // From subclass choices (e.g., Draconic Sorcerer fire resistance)
+  if (character.subclass && character.subclassChoices) {
+    // Check for Draconic Ancestry choice
+    const draconicAncestry = character.subclassChoices["Dragon Ancestor_Dragon Ancestor"] || 
+                             character.subclassChoices["Dragon Ancestor"];
+    
+    if (draconicAncestry) {
+      // Map dragon type to damage resistance
+      const dragonResistanceMap: Record<string, string> = {
+        "Black": "acid",
+        "Blue": "lightning",
+        "Brass": "fire",
+        "Bronze": "lightning",
+        "Copper": "acid",
+        "Gold": "fire",
+        "Green": "poison",
+        "Red": "fire",
+        "Silver": "cold",
+        "White": "cold"
+      };
+      
+      const resistance = dragonResistanceMap[draconicAncestry];
+      if (resistance && !resistances.includes(resistance)) {
+        resistances.push(resistance);
+      }
+    }
+    
+    // Check for Elemental Affinity feature (level 6) - grants resistance when spending sorcery points
+    // This is conditional, so we might want to note it differently, but for now we'll add it
+    // Actually, Elemental Affinity only grants resistance when spending sorcery points, not permanent
+    // So we won't add it to permanent resistances
+  }
 
   // Calculate weapons (attack bonus and damage)
   const weapons: Array<{
@@ -823,12 +1192,16 @@ function calculateStats(
     hitDie: `1d${hitDie}`,
     hitDice: `1d${hitDie}`,
     skills,
+    toolProficiencies: toolProficiencies.length > 0 ? toolProficiencies : undefined,
+    resistances: resistances.length > 0 ? resistances : undefined,
+    languages: languages.length > 0 ? languages : undefined,
     expandedEquipment,
     weapons: weapons.length > 0 ? weapons : undefined,
     spellSlots,
     spellSaveDC,
     spellAttackBonus,
     spellcastingAbility,
+    subclassFeatures: activeSubclassFeatures.length > 0 ? activeSubclassFeatures : undefined,
   };
 }
 

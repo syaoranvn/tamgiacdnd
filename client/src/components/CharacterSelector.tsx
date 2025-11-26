@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { Character } from "../types";
 import { apiUrl } from "../config/api";
 import ConfirmDialog from "./ConfirmDialog";
+import ImportCharacterDialog from "./ImportCharacterDialog";
 
 interface CharacterSelectorProps {
   onSelectCharacter: (character: Character) => void;
@@ -18,6 +19,7 @@ export default function CharacterSelector({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [exportingId, setExportingId] = useState<string | null>(null);
   const [creatingSample, setCreatingSample] = useState(false);
+  const [showImportDialog, setShowImportDialog] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
     characterId: string;
@@ -104,6 +106,10 @@ export default function CharacterSelector({
     } finally {
       setCreatingSample(false);
     }
+  };
+
+  const handleImportSuccess = async (character: Character) => {
+    await loadCharacters();
   };
 
   const handleExportPDF = async (characterId: string, characterName: string) => {
@@ -289,6 +295,15 @@ export default function CharacterSelector({
             {creatingSample ? "Đang tạo demo..." : "⚡ Tạo nhân vật demo"}
           </button>
           <button
+            onClick={() => setShowImportDialog(true)}
+            className="flex items-center justify-center rounded-2xl border border-blue-200 bg-white px-6 py-3 font-medium text-blue-700 shadow-sm transition-all hover:bg-blue-50"
+          >
+            <svg className="mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+            Import nhân vật
+          </button>
+          <button
             onClick={onCreateNew}
             className="rounded-2xl bg-amber-600 px-8 py-4 font-display text-lg text-white shadow-lg transition-all hover:bg-amber-700 hover:shadow-xl"
           >
@@ -306,6 +321,12 @@ export default function CharacterSelector({
         onConfirm={handleDeleteConfirm}
         onCancel={handleDeleteCancel}
         type="confirm"
+      />
+
+      <ImportCharacterDialog
+        isOpen={showImportDialog}
+        onClose={() => setShowImportDialog(false)}
+        onImportSuccess={handleImportSuccess}
       />
     </div>
   );

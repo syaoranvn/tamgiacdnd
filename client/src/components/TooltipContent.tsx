@@ -10,11 +10,18 @@ interface TooltipContentProps {
 }
 
 // Component để hiển thị text đã dịch
-const TranslatedText = ({ text }: { text: string }) => {
+const TranslatedText = ({
+  text,
+  skipTooltipProcessing = false,
+}: {
+  text: string;
+  skipTooltipProcessing?: boolean;
+}) => {
   const { translationEnabled } = useTranslationContext();
   const { translated, loading } = useTranslation(text, {
     enabled: translationEnabled,
     immediate: true,
+    skipTooltipProcessing,
   });
 
   if (loading && translationEnabled) {
@@ -146,16 +153,14 @@ export default function TooltipContent({ type, name, data, loading }: TooltipCon
               {data.entries.map((entry: any, idx: number) => {
                 if (typeof entry === "string") {
                   return (
-                    <div key={idx} className="mb-1">
-                      <TextWithTooltips text={entry} />
-                    </div>
+                    <TranslatedText key={idx} text={entry} />
                   );
                 } else if (entry.type === "list" && Array.isArray(entry.items)) {
                   return (
                     <ul key={idx} className="list-disc list-inside mb-1 space-y-1 mt-1">
                       {entry.items.map((item: string, i: number) => (
                         <li key={i}>
-                          <TextWithTooltips text={item} />
+                          <TranslatedText text={item} />
                         </li>
                       ))}
                     </ul>
@@ -166,11 +171,7 @@ export default function TooltipContent({ type, name, data, loading }: TooltipCon
                       <div className="font-medium text-slate-200 mb-1">{entry.name}</div>
                       {entry.entries && Array.isArray(entry.entries) && entry.entries.map((e: any, i: number) => {
                         if (typeof e === "string") {
-                          return (
-                            <div key={i} className="mb-1">
-                              <TextWithTooltips text={e} />
-                            </div>
-                          );
+                          return <TranslatedText key={i} text={e} />;
                         }
                         return null;
                       })}
@@ -711,7 +712,7 @@ export default function TooltipContent({ type, name, data, loading }: TooltipCon
                 if (typeof entry === "string") {
                   return (
                     <div key={idx} className="mb-1">
-                      <TextWithTooltips text={entry} />
+                      <TranslatedText text={entry} />
                     </div>
                   );
                 } else if (entry.type === "list" && Array.isArray(entry.items)) {
@@ -719,7 +720,7 @@ export default function TooltipContent({ type, name, data, loading }: TooltipCon
                     <ul key={idx} className="list-disc list-inside mb-1 space-y-1 mt-1">
                       {entry.items.map((item: string, i: number) => (
                         <li key={i}>
-                          <TextWithTooltips text={item} />
+                          <TranslatedText text={item} />
                         </li>
                       ))}
                     </ul>
@@ -732,7 +733,7 @@ export default function TooltipContent({ type, name, data, loading }: TooltipCon
                         if (typeof e === "string") {
                           return (
                             <div key={i} className="mb-1">
-                              <TextWithTooltips text={e} />
+                              <TranslatedText text={e} />
                             </div>
                           );
                         }

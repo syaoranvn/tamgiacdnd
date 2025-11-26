@@ -15,6 +15,8 @@ export interface Character {
   abilityScores: AbilityScores;
   proficiencies: string[];
   equipment: string[];
+  useGoldAlternative?: boolean; // If true, use gold instead of starting equipment
+  startingGold?: number; // Starting gold amount if useGoldAlternative is true
   feats?: string[];
   raceAbilityChoices?: AbilityKey[]; // Chosen ability scores from race/subrace
   raceSkillChoices?: string[]; // Chosen skills from race/subrace
@@ -24,6 +26,7 @@ export interface Character {
   raceToolChoice?: string; // Chosen tool proficiency
   raceDraconicAncestry?: string; // Chosen draconic ancestry (e.g., "Red", "Blue")
   classSkillChoices?: string[]; // Chosen skills from class
+  subclassChoices?: Record<string, any>; // Chosen options for subclass features (e.g., { "Draconic Ancestry": "Red" })
   backgroundSkillChoices?: string[]; // Chosen skills from background
   backgroundLanguageChoices?: string[]; // Chosen languages from background
   backgroundToolChoices?: string[]; // Chosen tools from background
@@ -143,6 +146,9 @@ export interface CalculatedStats {
   hitDie: string;
   hitDice: string; // Alias for hitDie
   skills: Record<string, { proficient: boolean; modifier: number }>;
+  toolProficiencies?: string[]; // Tool proficiencies from race, class, background
+  resistances?: string[]; // Damage resistances from race, subclass (e.g., "fire", "cold")
+  languages?: string[]; // Languages known
   expandedEquipment: string[]; // Equipment với pack contents đã mở
   weapons?: Array<{
     name: string;
@@ -154,5 +160,11 @@ export interface CalculatedStats {
   spellSaveDC?: number;
   spellAttackBonus?: number;
   spellcastingAbility?: string; // "str", "dex", "con", "int", "wis", "cha"
+  subclassFeatures?: Array<{
+    name: string;
+    level: number;
+    entries?: any[];
+    [key: string]: any;
+  }>; // Active subclass features based on choices and level
 }
 

@@ -1,11 +1,581 @@
 [
   {
-    "id": "4b595350-1141-46b2-a76b-550341472fcf",
-    "name": "Demo Sorcerer 145",
+    "id": "d8c9a9c7-d1e5-4e35-8878-b5fe53d3552a",
+    "createdAt": "2025-11-25T03:36:50.103Z",
+    "level": 1,
+    "abilityScores": {
+      "str": 14,
+      "dex": 9,
+      "con": 15,
+      "int": 16,
+      "wis": 13,
+      "cha": 11
+    },
+    "proficiencies": [
+      "Deception",
+      "Stealth",
+      "{@item thieves' tools|PHB}",
+      "Dex Saving Throws",
+      "Int Saving Throws",
+      "simple",
+      "{@item hand crossbow|phb|hand crossbows}",
+      "{@item longsword|phb|longswords}",
+      "{@item rapier|phb|rapiers}",
+      "{@item shortsword|phb|shortswords}",
+      "light"
+    ],
+    "equipment": [
+      "arrows (20)",
+      "burglar's pack",
+      "crowbar",
+      "dagger (2)",
+      "dark common clothes including a hood",
+      "leather armor",
+      "pouch",
+      "rapier",
+      "shortbow",
+      "thieves' tools"
+    ],
+    "race": "Elf",
+    "subrace": "",
+    "raceAbilityChoices": [],
+    "raceSkillChoices": [],
+    "raceFeatChoices": [],
+    "raceLanguageChoices": [],
+    "className": "Rogue",
+    "subclass": "",
+    "feats": [],
+    "classSkillChoices": [],
+    "subclassChoices": {},
+    "background": "Criminal",
+    "backgroundSkillChoices": [],
+    "backgroundLanguageChoices": [],
+    "backgroundToolChoices": [],
+    "backgroundEquipmentChoices": {},
+    "backgroundFeatureChoices": [],
+    "name": "a",
+    "alignment": "True Neutral",
+    "calculatedStats": {
+      "ac": 9,
+      "initiative": -1,
+      "speed": 30,
+      "passivePerception": 11,
+      "proficiencyBonus": 2,
+      "abilityModifiers": {
+        "str": 2,
+        "dex": -1,
+        "con": 2,
+        "int": 3,
+        "wis": 1,
+        "cha": 0
+      },
+      "savingThrows": {
+        "str": {
+          "proficient": false,
+          "modifier": 2
+        },
+        "dex": {
+          "proficient": true,
+          "modifier": 1
+        },
+        "con": {
+          "proficient": false,
+          "modifier": 2
+        },
+        "int": {
+          "proficient": true,
+          "modifier": 5
+        },
+        "wis": {
+          "proficient": false,
+          "modifier": 1
+        },
+        "cha": {
+          "proficient": false,
+          "modifier": 0
+        }
+      },
+      "hp": 10,
+      "hpCurrent": 10,
+      "hpMax": 10,
+      "maxHp": 10,
+      "hitDie": "1d8",
+      "hitDice": "1d8",
+      "skills": {
+        "Acrobatics": {
+          "proficient": false,
+          "modifier": -1
+        },
+        "Animal Handling": {
+          "proficient": false,
+          "modifier": 1
+        },
+        "Arcana": {
+          "proficient": false,
+          "modifier": 3
+        },
+        "Athletics": {
+          "proficient": false,
+          "modifier": 2
+        },
+        "Deception": {
+          "proficient": true,
+          "modifier": 2
+        },
+        "History": {
+          "proficient": false,
+          "modifier": 3
+        },
+        "Insight": {
+          "proficient": false,
+          "modifier": 1
+        },
+        "Intimidation": {
+          "proficient": false,
+          "modifier": 0
+        },
+        "Investigation": {
+          "proficient": false,
+          "modifier": 3
+        },
+        "Medicine": {
+          "proficient": false,
+          "modifier": 1
+        },
+        "Nature": {
+          "proficient": false,
+          "modifier": 3
+        },
+        "Perception": {
+          "proficient": false,
+          "modifier": 1
+        },
+        "Performance": {
+          "proficient": false,
+          "modifier": 0
+        },
+        "Persuasion": {
+          "proficient": false,
+          "modifier": 0
+        },
+        "Religion": {
+          "proficient": false,
+          "modifier": 3
+        },
+        "Sleight of Hand": {
+          "proficient": false,
+          "modifier": -1
+        },
+        "Stealth": {
+          "proficient": true,
+          "modifier": 1
+        },
+        "Survival": {
+          "proficient": false,
+          "modifier": 1
+        }
+      },
+      "toolProficiencies": [
+        "{@item thieves' tools|PHB}"
+      ],
+      "expandedEquipment": []
+    },
+    "useGoldAlternative": false,
+    "spells": {}
+  },
+  {
+    "id": "9229b5f9-82fb-4e6c-834f-c4fd641b5927",
+    "createdAt": "2025-11-26T05:54:56.054Z",
+    "level": 3,
+    "abilityScores": {
+      "str": 17,
+      "dex": 12,
+      "con": 17,
+      "int": 9,
+      "wis": 15,
+      "cha": 14
+    },
+    "proficiencies": [
+      "Deception",
+      "Stealth",
+      "{@item thieves' tools|PHB}",
+      "Dex Saving Throws",
+      "Int Saving Throws",
+      "simple",
+      "{@item hand crossbow|phb|hand crossbows}",
+      "{@item longsword|phb|longswords}",
+      "{@item rapier|phb|rapiers}",
+      "{@item shortsword|phb|shortswords}",
+      "light"
+    ],
+    "equipment": [
+      "arrows (20)",
+      "burglar's pack",
+      "crowbar",
+      "dagger (2)",
+      "dark common clothes including a hood",
+      "leather armor",
+      "pouch",
+      "rapier",
+      "shortbow",
+      "thieves' tools"
+    ],
+    "race": "Tiefling",
+    "subrace": "",
+    "raceAbilityChoices": [],
+    "raceSkillChoices": [],
+    "raceFeatChoices": [],
+    "raceLanguageChoices": [],
+    "className": "Rogue",
+    "subclass": "Assassin",
+    "feats": [],
+    "classSkillChoices": [],
+    "subclassChoices": {},
+    "background": "Criminal",
+    "backgroundSkillChoices": [],
+    "backgroundLanguageChoices": [],
+    "backgroundToolChoices": [],
+    "backgroundEquipmentChoices": {},
+    "backgroundFeatureChoices": [],
+    "name": "a",
+    "alignment": "True Neutral",
+    "calculatedStats": {
+      "ac": 12,
+      "initiative": 1,
+      "speed": 30,
+      "passivePerception": 12,
+      "proficiencyBonus": 2,
+      "abilityModifiers": {
+        "str": 3,
+        "dex": 1,
+        "con": 3,
+        "int": -1,
+        "wis": 2,
+        "cha": 2
+      },
+      "savingThrows": {
+        "str": {
+          "proficient": false,
+          "modifier": 3
+        },
+        "dex": {
+          "proficient": true,
+          "modifier": 3
+        },
+        "con": {
+          "proficient": false,
+          "modifier": 3
+        },
+        "int": {
+          "proficient": true,
+          "modifier": 1
+        },
+        "wis": {
+          "proficient": false,
+          "modifier": 2
+        },
+        "cha": {
+          "proficient": false,
+          "modifier": 2
+        }
+      },
+      "hp": 27,
+      "hpCurrent": 27,
+      "hpMax": 27,
+      "maxHp": 27,
+      "hitDie": "1d8",
+      "hitDice": "1d8",
+      "skills": {
+        "Acrobatics": {
+          "proficient": false,
+          "modifier": 1
+        },
+        "Animal Handling": {
+          "proficient": false,
+          "modifier": 2
+        },
+        "Arcana": {
+          "proficient": false,
+          "modifier": -1
+        },
+        "Athletics": {
+          "proficient": false,
+          "modifier": 3
+        },
+        "Deception": {
+          "proficient": true,
+          "modifier": 4
+        },
+        "History": {
+          "proficient": false,
+          "modifier": -1
+        },
+        "Insight": {
+          "proficient": false,
+          "modifier": 2
+        },
+        "Intimidation": {
+          "proficient": false,
+          "modifier": 2
+        },
+        "Investigation": {
+          "proficient": false,
+          "modifier": -1
+        },
+        "Medicine": {
+          "proficient": false,
+          "modifier": 2
+        },
+        "Nature": {
+          "proficient": false,
+          "modifier": -1
+        },
+        "Perception": {
+          "proficient": false,
+          "modifier": 2
+        },
+        "Performance": {
+          "proficient": false,
+          "modifier": 2
+        },
+        "Persuasion": {
+          "proficient": false,
+          "modifier": 2
+        },
+        "Religion": {
+          "proficient": false,
+          "modifier": -1
+        },
+        "Sleight of Hand": {
+          "proficient": false,
+          "modifier": 1
+        },
+        "Stealth": {
+          "proficient": true,
+          "modifier": 3
+        },
+        "Survival": {
+          "proficient": false,
+          "modifier": 2
+        }
+      },
+      "toolProficiencies": [
+        "{@item thieves' tools|PHB}"
+      ],
+      "resistances": [
+        "fire"
+      ],
+      "expandedEquipment": [
+        "arrows (20)",
+        "burglar's pack",
+        "crowbar",
+        "dagger (2)",
+        "dark common clothes including a hood",
+        "leather armor",
+        "pouch",
+        "rapier",
+        "shortbow",
+        "thieves' tools"
+      ],
+      "weapons": [
+        {
+          "name": "dagger",
+          "attackBonus": 5,
+          "damage": "1d4",
+          "damageType": "piercing"
+        },
+        {
+          "name": "rapier",
+          "attackBonus": 5,
+          "damage": "1d8",
+          "damageType": "piercing"
+        },
+        {
+          "name": "shortbow",
+          "attackBonus": 3,
+          "damage": "1d6",
+          "damageType": "piercing"
+        }
+      ],
+      "subclassFeatures": [
+        {
+          "name": "Assassin",
+          "source": "PHB",
+          "page": 97,
+          "className": "Rogue",
+          "classSource": "PHB",
+          "subclassShortName": "Assassin",
+          "subclassSource": "PHB",
+          "level": 3,
+          "entries": [
+            "You focus your training on the grim art of death. Those who adhere to this archetype are diverse—hired killers, spies, bounty hunters, and even specially anointed priests trained to exterminate the enemies of their deity. Stealth, poison, and disguise help you eliminate your foes with deadly efficiency.",
+            "Your archetype grants you features at 3rd level and then again at 9th, 13th, and 17th level.",
+            {
+              "type": "refSubclassFeature",
+              "subclassFeature": "Assassinate|Rogue||Assassin||3"
+            },
+            {
+              "type": "refSubclassFeature",
+              "subclassFeature": "Bonus Proficiencies|Rogue||Assassin||3"
+            }
+          ]
+        },
+        {
+          "name": "Assassinate",
+          "source": "PHB",
+          "page": 97,
+          "className": "Rogue",
+          "classSource": "PHB",
+          "subclassShortName": "Assassin",
+          "subclassSource": "PHB",
+          "level": 3,
+          "header": 1,
+          "entries": [
+            "Starting at 3rd level, you are at your deadliest when you get the drop on your enemies. You have advantage on attack rolls against any creature that hasn't taken a turn in the combat yet. In addition, any hit you score against a creature that is {@status surprised} is a critical hit."
+          ]
+        },
+        {
+          "name": "Bonus Proficiencies",
+          "source": "PHB",
+          "page": 97,
+          "className": "Rogue",
+          "classSource": "PHB",
+          "subclassShortName": "Assassin",
+          "subclassSource": "PHB",
+          "level": 3,
+          "header": 1,
+          "entries": [
+            "When you choose this archetype at 3rd level, you gain proficiency with the {@item disguise kit|phb} and the {@item poisoner's kit|phb}."
+          ]
+        }
+      ]
+    },
+    "subclassFeatures": [
+      {
+        "name": "Assassin",
+        "source": "PHB",
+        "page": 97,
+        "className": "Rogue",
+        "classSource": "PHB",
+        "subclassShortName": "Assassin",
+        "subclassSource": "PHB",
+        "level": 3,
+        "entries": [
+          "You focus your training on the grim art of death. Those who adhere to this archetype are diverse—hired killers, spies, bounty hunters, and even specially anointed priests trained to exterminate the enemies of their deity. Stealth, poison, and disguise help you eliminate your foes with deadly efficiency.",
+          "Your archetype grants you features at 3rd level and then again at 9th, 13th, and 17th level.",
+          {
+            "type": "refSubclassFeature",
+            "subclassFeature": "Assassinate|Rogue||Assassin||3"
+          },
+          {
+            "type": "refSubclassFeature",
+            "subclassFeature": "Bonus Proficiencies|Rogue||Assassin||3"
+          }
+        ]
+      },
+      {
+        "name": "Assassinate",
+        "source": "PHB",
+        "page": 97,
+        "className": "Rogue",
+        "classSource": "PHB",
+        "subclassShortName": "Assassin",
+        "subclassSource": "PHB",
+        "level": 3,
+        "header": 1,
+        "entries": [
+          "Starting at 3rd level, you are at your deadliest when you get the drop on your enemies. You have advantage on attack rolls against any creature that hasn't taken a turn in the combat yet. In addition, any hit you score against a creature that is {@status surprised} is a critical hit."
+        ]
+      },
+      {
+        "name": "Bonus Proficiencies",
+        "source": "PHB",
+        "page": 97,
+        "className": "Rogue",
+        "classSource": "PHB",
+        "subclassShortName": "Assassin",
+        "subclassSource": "PHB",
+        "level": 3,
+        "header": 1,
+        "entries": [
+          "When you choose this archetype at 3rd level, you gain proficiency with the {@item disguise kit|phb} and the {@item poisoner's kit|phb}."
+        ]
+      }
+    ],
+    "useGoldAlternative": false,
+    "spells": {
+      "cantrips": [
+        "thaumaturgy"
+      ],
+      "level1": [
+        "hellish rebuke"
+      ]
+    }
+  },
+  {
+    "id": "50cdf39d-d12d-4b64-9446-997ecfeceed0",
+    "createdAt": "2025-11-26T06:50:54.621Z",
+    "name": "a",
+    "race": "Elf",
+    "subrace": "Wood",
+    "className": "Sorcerer",
+    "background": "Acolyte",
+    "alignment": "True Neutral",
+    "level": 1,
+    "experiencePoints": 0,
+    "abilityScores": {
+      "str": 9,
+      "dex": 11,
+      "con": 6,
+      "int": 9,
+      "wis": 15,
+      "cha": 11
+    },
+    "proficiencies": [
+      "Elvish",
+      "Giant",
+      "Dagger",
+      "Dart",
+      "Sling",
+      "Quarterstaff",
+      "Light crossbow"
+    ],
+    "equipment": [
+      "common clothes",
+      "component pouch",
+      "crossbow bolts (20)",
+      "dagger (2)",
+      "dungeoneer's pack",
+      "holy symbol (a gift to you when you entered the priesthood)",
+      "light crossbow",
+      "pouch",
+      "sticks of incense (5)",
+      "vestments"
+    ],
+    "spells": {
+      "cantrips": [
+        "Ray of Frost",
+        "Prestidigitation",
+        "True Strike",
+        "Message"
+      ],
+      "level1": [
+        "Charm Person",
+        "Burning Hands"
+      ]
+    },
+    "ideals": "asd",
+    "bonds": "asd",
+    "flaws": "asd",
+    "notes": "Spellcasting\n\nSorcerous Origin\n\nElf Weapon Training\n\nFleet of Foot\n\nMask of the Wild\n\nShelter of the Faithful\n\nLevel 1: Draconic Bloodline\n\nLevel 1: Draconic Resilience\n\nLevel 1: Dragon Ancestor\n\nDamage Resistances: Fire Resistance"
+  },
+  {
+    "id": "3cce25cd-d354-46f1-a453-1d7f324c740d",
+    "createdAt": "2025-11-26T06:51:35.642Z",
+    "name": "Demo Sorcerer 574",
     "race": "Gnome",
     "subrace": "Forest",
     "className": "Sorcerer",
-    "subclass": "Draconic Bloodline",
     "background": "Hermit",
     "alignment": "CG",
     "level": 6,
@@ -19,32 +589,31 @@
       "cha": 18
     },
     "proficiencies": [
+      "Common",
+      "Gnomish",
       "Daggers",
-      "Darts",
-      "Slings",
       "Quarterstaffs",
       "Light crossbows",
-      "Arcana",
-      "Deception",
-      "Insight",
-      "Religion",
-      "Survival",
-      "herbalism kit",
-      "Gnomish"
+      "Dagger",
+      "Dart",
+      "Sling",
+      "Quarterstaff",
+      "Light crossbow",
+      "Herbalism kit",
+      "Darts",
+      "Slings"
     ],
     "equipment": [
       "light crossbow",
       "crossbow bolts (20)",
-      "dagger (2)",
+      "dagger",
+      "dagger",
       "explorer's pack",
       "component pouch",
       "scholar's pack",
       "spellbook",
       "herbalism kit",
       "staff"
-    ],
-    "feats": [
-      "Alert"
     ],
     "spells": {
       "cantrips": [
@@ -68,40 +637,163 @@
         "Clairvoyance"
       ]
     },
-    "ideals": "Kiến thức là chìa khóa mở ra vũ trụ.",
-    "bonds": "Bảo vệ bộ tộc gnome của mình.",
-    "flaws": "Tò mò quá mức.",
-    "notes": "Nhân vật mẫu để test export PDF.",
-    "raceLanguageChoices": [
+    "ideals": "Kien thuc la chia khoa mo ra vu tru.",
+    "bonds": "Bao ve bo toc gnome cua minh.",
+    "flaws": "To mo qua muc.",
+    "notes": "Spellcasting\n\nSorcerous Origin\n\nFont of Magic\n\nMetamagic\n\nMetamagic Options\n\nAbility Score Improvement\n\nSorcerous Versatility\n\nMagical Guidance\n\nSorcerous Origin feature\n\nNatural Illusionist\n\nSpeak with Small Beasts\n\nDiscovery\n\nSpecialty\n\nAlert"
+  },
+  {
+    "id": "3c98108e-663e-4b2b-ae59-ee0b36a34e74",
+    "createdAt": "2025-11-26T06:51:40.328Z",
+    "name": "Demo Sorcerer 145",
+    "race": "Gnome",
+    "subrace": "Forest",
+    "className": "Sorcerer",
+    "background": "Hermit",
+    "alignment": "CG",
+    "level": 6,
+    "experiencePoints": 14000,
+    "abilityScores": {
+      "str": 10,
+      "dex": 14,
+      "con": 16,
+      "int": 12,
+      "wis": 12,
+      "cha": 18
+    },
+    "proficiencies": [
       "Common",
-      "Gnomish"
+      "Gnomish",
+      "Daggers",
+      "Quarterstaffs",
+      "Light crossbows",
+      "Dagger",
+      "Dart",
+      "Sling",
+      "Quarterstaff",
+      "Light crossbow",
+      "Herbalism kit",
+      "Darts",
+      "Slings"
     ],
+    "equipment": [
+      "light crossbow",
+      "crossbow bolts (20)",
+      "dagger",
+      "dagger",
+      "explorer's pack",
+      "component pouch",
+      "scholar's pack",
+      "spellbook",
+      "herbalism kit",
+      "staff"
+    ],
+    "spells": {
+      "cantrips": [
+        "Fire Bolt",
+        "Acid Splash",
+        "Blade Ward",
+        "Chill Touch",
+        "Friends"
+      ],
+      "level1": [
+        "Burning Hands",
+        "Charm Person",
+        "Chromatic Orb"
+      ],
+      "level2": [
+        "Alter Self",
+        "Blindness/Deafness"
+      ],
+      "level3": [
+        "Blink",
+        "Clairvoyance"
+      ]
+    },
+    "ideals": "Kien thuc la chia khoa mo ra vu tru.",
+    "bonds": "Bao ve bo toc gnome cua minh.",
+    "flaws": "To mo qua muc.",
+    "notes": "Spellcasting\n\nSorcerous Origin\n\nFont of Magic\n\nMetamagic\n\nMetamagic Options\n\nAbility Score Improvement\n\nSorcerous Versatility\n\nMagical Guidance\n\nSorcerous Origin feature\n\nNatural Illusionist\n\nSpeak with Small Beasts\n\nDiscovery\n\nSpecialty\n\nAlert"
+  },
+  {
+    "id": "82413e34-9d61-4e9d-8931-4ff479e9c2ce",
+    "createdAt": "2025-11-26T07:24:54.723Z",
+    "level": 1,
+    "abilityScores": {
+      "str": 14,
+      "dex": 16,
+      "con": 12,
+      "int": 13,
+      "wis": 13,
+      "cha": 15
+    },
+    "proficiencies": [
+      "Insight",
+      "Persuasion",
+      "Str Saving Throws",
+      "Con Saving Throws",
+      "simple",
+      "martial",
+      "light",
+      "medium",
+      "shield"
+    ],
+    "equipment": [
+      "explorer's pack",
+      "greataxe",
+      "handaxe (2)",
+      "javelin (4)",
+      "letter of introduction from your guild",
+      "pouch",
+      "traveler's clothes"
+    ],
+    "race": "Gnome",
+    "subrace": "Forest",
+    "raceAbilityChoices": [],
+    "raceSkillChoices": [],
+    "raceFeatChoices": [],
+    "raceLanguageChoices": [],
+    "className": "Barbarian",
+    "subclass": "",
+    "feats": [],
+    "classSkillChoices": [],
+    "subclassChoices": {},
+    "background": "Guild Artisan",
+    "backgroundSkillChoices": [],
+    "backgroundLanguageChoices": [
+      "Elvish"
+    ],
+    "backgroundToolChoices": [],
+    "backgroundEquipmentChoices": {},
+    "backgroundFeatureChoices": [],
+    "name": "a",
+    "alignment": "True Neutral",
     "calculatedStats": {
-      "ac": 14,
-      "initiative": 2,
+      "ac": 13,
+      "initiative": 3,
       "speed": 25,
-      "passivePerception": 12,
-      "proficiencyBonus": 3,
+      "passivePerception": 11,
+      "proficiencyBonus": 2,
       "abilityModifiers": {
-        "str": 0,
-        "dex": 2,
-        "con": 3,
+        "str": 2,
+        "dex": 3,
+        "con": 1,
         "int": 1,
         "wis": 1,
-        "cha": 4
+        "cha": 2
       },
       "savingThrows": {
         "str": {
-          "proficient": false,
-          "modifier": 0
+          "proficient": true,
+          "modifier": 4
         },
         "dex": {
           "proficient": false,
-          "modifier": 2
+          "modifier": 3
         },
         "con": {
           "proficient": true,
-          "modifier": 6
+          "modifier": 3
         },
         "int": {
           "proficient": false,
@@ -112,36 +804,36 @@
           "modifier": 1
         },
         "cha": {
-          "proficient": true,
-          "modifier": 7
+          "proficient": false,
+          "modifier": 2
         }
       },
-      "hp": 36,
-      "hpCurrent": 36,
-      "hpMax": 36,
-      "maxHp": 36,
-      "hitDie": "d6",
-      "hitDice": "6d6",
+      "hp": 13,
+      "hpCurrent": 13,
+      "hpMax": 13,
+      "maxHp": 13,
+      "hitDie": "1d12",
+      "hitDice": "1d12",
       "skills": {
         "Acrobatics": {
           "proficient": false,
-          "modifier": 2
+          "modifier": 3
         },
         "Animal Handling": {
           "proficient": false,
           "modifier": 1
         },
         "Arcana": {
-          "proficient": true,
-          "modifier": 4
+          "proficient": false,
+          "modifier": 1
         },
         "Athletics": {
           "proficient": false,
-          "modifier": 0
+          "modifier": 2
         },
         "Deception": {
-          "proficient": true,
-          "modifier": 7
+          "proficient": false,
+          "modifier": 2
         },
         "History": {
           "proficient": false,
@@ -149,11 +841,11 @@
         },
         "Insight": {
           "proficient": true,
-          "modifier": 4
+          "modifier": 3
         },
         "Intimidation": {
           "proficient": false,
-          "modifier": 4
+          "modifier": 2
         },
         "Investigation": {
           "proficient": false,
@@ -168,78 +860,41 @@
           "modifier": 1
         },
         "Perception": {
-          "proficient": true,
-          "modifier": 4
+          "proficient": false,
+          "modifier": 1
         },
         "Performance": {
           "proficient": false,
-          "modifier": 4
+          "modifier": 2
         },
         "Persuasion": {
-          "proficient": false,
+          "proficient": true,
           "modifier": 4
         },
         "Religion": {
-          "proficient": true,
-          "modifier": 4
+          "proficient": false,
+          "modifier": 1
         },
         "Sleight of Hand": {
           "proficient": false,
-          "modifier": 2
+          "modifier": 3
         },
         "Stealth": {
           "proficient": false,
-          "modifier": 2
+          "modifier": 3
         },
         "Survival": {
-          "proficient": true,
-          "modifier": 4
+          "proficient": false,
+          "modifier": 1
         }
       },
-      "expandedEquipment": [
-        "light crossbow",
-        "crossbow bolts (20)",
-        "dagger",
-        "dagger",
-        "explorer's pack",
-        "component pouch",
-        "scholar's pack",
-        "spellbook",
-        "herbalism kit",
-        "staff"
-      ],
-      "weapons": [
-        {
-          "name": "Light Crossbow",
-          "attackBonus": 7,
-          "damage": "1d8+4",
-          "damageType": "piercing"
-        },
-        {
-          "name": "Dagger",
-          "attackBonus": 6,
-          "damage": "1d4+4",
-          "damageType": "piercing"
-        }
-      ],
-      "spellSlots": {
-        "level1": {
-          "total": 4,
-          "used": 0
-        },
-        "level2": {
-          "total": 3,
-          "used": 0
-        },
-        "level3": {
-          "total": 3,
-          "used": 0
-        }
-      },
-      "spellSaveDC": 15,
-      "spellAttackBonus": 7,
-      "spellcastingAbility": "CHA"
+      "expandedEquipment": []
     },
-    "createdAt": "2025-11-24T09:10:47.805Z"
+    "useGoldAlternative": false,
+    "spells": {
+      "cantrips": [
+        "minor illusion"
+      ]
+    }
   }
 ]

@@ -4,13 +4,14 @@ import { translateText } from "../utils/translator";
 interface UseTranslationOptions {
   enabled?: boolean;
   immediate?: boolean;
+  skipTooltipProcessing?: boolean;
 }
 
 export const useTranslation = (
   text: string,
   options: UseTranslationOptions = {}
 ) => {
-  const { enabled = true, immediate = true } = options;
+  const { enabled = true, immediate = true, skipTooltipProcessing = false } = options;
   const [translated, setTranslated] = useState<string>(text);
   const [loading, setLoading] = useState(false);
 
@@ -26,7 +27,7 @@ export const useTranslation = (
     }
 
     setLoading(true);
-    translateText(text, enabled)
+    translateText(text, enabled, { skipTooltipProcessing })
       .then((result) => {
         setTranslated(result);
       })

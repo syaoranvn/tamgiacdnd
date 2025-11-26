@@ -162,16 +162,43 @@ export default function CharacterWizard({
     }
   };
 
+  // Get subclass level for a class (static mapping based on PHB and other sources)
+  const getSubclassLevel = (className: string): number => {
+    const subclassLevelMap: Record<string, number> = {
+      // Level 1
+      "Cleric": 1,
+      "Sorcerer": 1,
+      "Warlock": 1,
+      "Mystic": 1,
+      // Level 2
+      "Wizard": 2,
+      "Druid": 2,
+      // Level 3
+      "Fighter": 3,
+      "Rogue": 3,
+      "Bard": 3,
+      "Barbarian": 3,
+      "Monk": 3,
+      "Paladin": 3,
+      "Ranger": 3,
+      "Artificer": 3,
+    };
+    return subclassLevelMap[className] || 3; // Default to 3 if unknown
+  };
+
   const canProceed = () => {
     switch (currentStep) {
       case 1:
         return !!character.race; // Subrace is optional
       case 2:
-        // Class is required, subclass is required only if level >= 3
+        // Class is required, subclass is required if level >= subclass level for that class
         if (!character.className) return false;
-        if (character.level && character.level >= 3) {
-          // Check if class has subclasses - this will be validated in Step2Class component
-          return true; // Let Step2Class handle subclass validation
+        if (character.level && character.className) {
+          const requiredSubclassLevel = getSubclassLevel(character.className);
+          if (character.level >= requiredSubclassLevel) {
+            // Subclass is required at this level
+            return !!character.subclass;
+          }
         }
         return true;
       case 3:
@@ -328,13 +355,15 @@ export default function CharacterWizard({
                 selectedSubclass={character.subclass}
                 selectedFeats={character.feats || []}
                 classSkillChoices={character.classSkillChoices}
+                subclassChoices={character.subclassChoices || {}}
                 onSelectClass={(className) =>
-                  updateCharacter({ className, subclass: undefined, feats: [], classSkillChoices: [] })
+                  updateCharacter({ className, subclass: undefined, feats: [], classSkillChoices: [], subclassChoices: {} })
                 }
                 onSelectLevel={(level) => updateCharacter({ level })}
-                onSelectSubclass={(subclass) => updateCharacter({ subclass })}
+                onSelectSubclass={(subclass) => updateCharacter({ subclass, subclassChoices: {} })}
                 onSelectFeats={(feats) => updateCharacter({ feats })}
                 onSelectSkillChoices={(choices) => updateCharacter({ classSkillChoices: choices })}
+                onSelectSubclassChoices={(choices) => updateCharacter({ subclassChoices: choices })}
               />
             )}
             {currentStep === 3 && (

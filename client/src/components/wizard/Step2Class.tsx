@@ -60,11 +60,13 @@ interface Step2ClassProps {
   selectedSubclass?: string;
   selectedFeats?: string[];
   classSkillChoices?: string[];
+  subclassChoices?: Record<string, any>; // Store choices for subclass features (e.g., { "Draconic Ancestry": "Red" })
   onSelectClass: (className: string) => void;
   onSelectLevel: (level: number) => void;
   onSelectSubclass: (subclass: string) => void;
   onSelectFeats: (feats: string[]) => void;
   onSelectSkillChoices?: (choices: string[]) => void;
+  onSelectSubclassChoices?: (choices: Record<string, any>) => void;
 }
 
 const getASILevels = (classFeatures: any[]): number[] => {
@@ -98,15 +100,19 @@ export default function Step2Class({
   selectedSubclass,
   selectedFeats = [],
   classSkillChoices = [],
+  subclassChoices = {},
   onSelectClass,
   onSelectLevel,
   onSelectSubclass,
   onSelectFeats,
   onSelectSkillChoices,
+  onSelectSubclassChoices,
 }: Step2ClassProps) {
   const [selectedClassData, setSelectedClassData] = useState<Class | null>(null);
   const [subclasses, setSubclasses] = useState<Subclass[]>([]);
   const [selectedSubclassData, setSelectedSubclassData] = useState<Subclass | null>(null);
+  const [subclassFeaturesData, setSubclassFeaturesData] = useState<any[]>([]);
+  const [loadingSubclassFeatures, setLoadingSubclassFeatures] = useState(false);
   const [feats, setFeats] = useState<Feat[]>([]);
   const [showClassDetails, setShowClassDetails] = useState(false);
   const [showSubclassDetails, setShowSubclassDetails] = useState(false);
@@ -116,16 +122,46 @@ export default function Step2Class({
   const [allSkills, setAllSkills] = useState<Skill[]>([]);
   const [loadingSkills, setLoadingSkills] = useState(false);
 
+  // Get subclass level for a class (static mapping based on PHB and other sources)
+  const getSubclassLevel = (className: string): number => {
+    const subclassLevelMap: Record<string, number> = {
+      // Level 1
+      "Cleric": 1,
+      "Sorcerer": 1,
+      "Warlock": 1,
+      "Mystic": 1,
+      // Level 2
+      "Wizard": 2,
+      "Druid": 2,
+      // Level 3
+      "Fighter": 3,
+      "Rogue": 3,
+      "Bard": 3,
+      "Barbarian": 3,
+      "Monk": 3,
+      "Paladin": 3,
+      "Ranger": 3,
+      "Artificer": 3,
+    };
+    return subclassLevelMap[className] || 3; // Default to 3 if unknown
+  };
+
+  const subclassLevel = selectedClass ? getSubclassLevel(selectedClass) : null;
+
   useEffect(() => {
     if (selectedClass) {
       const classData = classes.find((c) => c.name === selectedClass);
       setSelectedClassData(classData || null);
-      if (selectedLevel >= 3) {
+      
+      // Load subclasses if level is high enough
+      if (subclassLevel !== null && selectedLevel >= subclassLevel) {
         loadSubclasses(selectedClass);
       } else {
         setSubclasses([]);
         setSelectedSubclassData(null);
+        onSelectSubclass(""); // Clear subclass if level is too low
       }
+      
       if (selectedLevel >= 4) {
         loadFeats();
       }
@@ -134,16 +170,95 @@ export default function Step2Class({
       setSubclasses([]);
       setSelectedSubclassData(null);
     }
-  }, [selectedClass, classes, selectedLevel]);
+  }, [selectedClass, classes, selectedLevel, subclassLevel]);
 
+  // Load full subclass data and features when selected
   useEffect(() => {
-    if (selectedSubclass && subclasses.length > 0) {
-      const subclass = subclasses.find((s) => s.name === selectedSubclass);
-      setSelectedSubclassData(subclass || null);
+    if (selectedSubclass && selectedClass) {
+      const loadFullSubclassData = async () => {
+        try {
+          const response = await fetch(
+            apiUrl(`api/data/subclasses/${selectedClass}/${encodeURIComponent(selectedSubclass)}`)
+          );
+          if (response.ok) {
+            const fullSubclassData = await response.json();
+            console.log("[Step2Class] Loaded full subclass data:", fullSubclassData);
+            setSelectedSubclassData(fullSubclassData);
+            
+            // Load subclass features data from class file
+            if (fullSubclassData.subclassFeatures && fullSubclassData.subclassFeatures.length > 0) {
+              setLoadingSubclassFeatures(true);
+              try {
+                // Load class file to get subclassFeature entries
+                const classResponse = await fetch(
+                  apiUrl(`api/data/classes/${selectedClass.toLowerCase()}`)
+                );
+                if (classResponse.ok) {
+                  const classData = await classResponse.json();
+                  
+                  // Find subclassFeature entries in class data
+                  const subclassFeatureEntries: any[] = [];
+                  if (classData.subclassFeature && Array.isArray(classData.subclassFeature)) {
+                    // Filter subclassFeature entries for this subclass
+                    const subclassShortName = fullSubclassData.shortName || fullSubclassData.name;
+                    console.log("[Step2Class] Looking for subclass features with:", {
+                      className: selectedClass,
+                      subclassShortName,
+                      subclassName: fullSubclassData.name
+                    });
+                    
+                    classData.subclassFeature.forEach((sf: any) => {
+                      // Check if this subclassFeature belongs to the selected subclass
+                      const matchesClass = sf.className === selectedClass;
+                      const matchesSubclass = sf.subclassShortName === subclassShortName || 
+                                             sf.subclassShortName === fullSubclassData.name ||
+                                             sf.subclass === subclassShortName ||
+                                             sf.subclass === fullSubclassData.name;
+                      
+                      if (matchesClass && matchesSubclass) {
+                        // Only include features available at current level
+                        if (!sf.level || sf.level <= selectedLevel) {
+                          console.log("[Step2Class] Found matching subclassFeature:", sf.name, "level:", sf.level);
+                          subclassFeatureEntries.push(sf);
+                        }
+                      }
+                    });
+                  }
+                  
+                  console.log("[Step2Class] Found subclassFeature entries:", subclassFeatureEntries);
+                  setSubclassFeaturesData(subclassFeatureEntries);
+                }
+              } catch (e) {
+                console.error("Error loading subclass features:", e);
+                setSubclassFeaturesData([]);
+              }
+              setLoadingSubclassFeatures(false);
+            }
+            
+            // Auto-expand details when subclass is selected
+            setShowSubclassDetails(true);
+          } else {
+            console.warn("[Step2Class] Failed to load full subclass data, using basic data");
+            // Fallback to basic subclass data from list
+            const subclass = subclasses.find((s) => s.name === selectedSubclass);
+            setSelectedSubclassData(subclass || null);
+            setShowSubclassDetails(true);
+          }
+        } catch (error) {
+          console.error("Error loading full subclass data:", error);
+          // Fallback to basic subclass data from list
+          const subclass = subclasses.find((s) => s.name === selectedSubclass);
+          setSelectedSubclassData(subclass || null);
+          setShowSubclassDetails(true);
+        }
+      };
+      loadFullSubclassData();
     } else {
       setSelectedSubclassData(null);
+      setSubclassFeaturesData([]);
+      setShowSubclassDetails(false);
     }
-  }, [selectedSubclass, subclasses]);
+  }, [selectedSubclass, selectedClass, subclasses, selectedLevel]);
 
   // Load skills if class has skill choices
   useEffect(() => {
@@ -503,18 +618,19 @@ export default function Step2Class({
           </div>
         )}
 
-        {selectedClassData && selectedLevel >= 3 && subclasses.length > 0 && (
+        {selectedClassData && subclassLevel !== null && selectedLevel >= subclassLevel && (
           <div>
             <label className="mb-2 block text-sm font-medium text-slate-700">
-              Chọn {selectedClassData.subclassTitle || "Subclass"} *
+              Chọn {selectedClassData.subclassTitle || "Subclass"} * (Level {subclassLevel})
             </label>
             {loadingSubclasses ? (
               <div className="text-sm text-slate-500">Đang tải...</div>
-            ) : (
+            ) : subclasses.length > 0 ? (
               <select
                 value={selectedSubclass || ""}
                 onChange={(e) => onSelectSubclass(e.target.value)}
                 className="w-full rounded-2xl border border-amber-100 bg-white px-4 py-3 text-ink focus:border-amber-400 focus:outline-none"
+                required
               >
                 <option value="">-- Chọn {selectedClassData.subclassTitle || "Subclass"} --</option>
                 {subclasses.map((subclass) => (
@@ -523,6 +639,8 @@ export default function Step2Class({
                   </option>
                 ))}
               </select>
+            ) : (
+              <div className="text-sm text-amber-600">Không tìm thấy subclass cho class này.</div>
             )}
 
             {selectedSubclassData && (
@@ -539,29 +657,261 @@ export default function Step2Class({
                     {showSubclassDetails ? "Ẩn" : "Chi tiết"}
                   </button>
                 </div>
-                {showSubclassDetails && selectedSubclassData.entries && (
-                  <div className="mt-3 space-y-2 border-t border-amber-200 pt-3 text-sm text-slate-600">
-                    {getAllEntries(selectedSubclassData.entries)
-                      .slice(0, 3)
-                      .map((entry: any, idx: number) => (
-                        <div key={idx} className="rounded-lg bg-white/50 p-2">
-                          <div className="font-medium text-slate-700 mb-1">
-                            {entry.name}
-                          </div>
-                            <div className="text-slate-600">
-                              {Array.isArray(entry.entries)
-                                ? entry.entries
-                                    .filter((e: any) => typeof e === "string")
-                                    .slice(0, 1)
-                                    .map((e: string, i: number) => (
-                                      <div key={i}>
-                                        <TextWithTooltips text={e} />
+                {showSubclassDetails && (
+                  <div className="mt-3 space-y-3 border-t border-amber-200 pt-3 text-sm">
+                    {loadingSubclassFeatures ? (
+                      <div className="text-slate-500 text-sm">Đang tải chi tiết...</div>
+                    ) : (
+                      <>
+                        {/* Show entries from subclass data if available */}
+                        {selectedSubclassData.entries && getAllEntries(selectedSubclassData.entries).length > 0 && (
+                          getAllEntries(selectedSubclassData.entries).map((entry: any, idx: number) => {
+                            // Check if entry has choices
+                            const hasChoice = entry.choose && entry.choose.from && entry.choose.count;
+                            const choiceKey = entry.name || `choice_${idx}`;
+                            const currentChoice = subclassChoices[choiceKey];
+                            
+                            return (
+                              <div key={idx} className="rounded-lg bg-white/50 p-3">
+                                <div className="font-medium text-slate-700 mb-2">
+                                  {entry.name}
+                                </div>
+                                <div className="text-slate-600 space-y-2">
+                                  {Array.isArray(entry.entries)
+                                    ? entry.entries
+                                        .filter((e: any) => typeof e === "string")
+                                        .map((e: string, i: number) => (
+                                          <div key={i}>
+                                            <TextWithTooltips text={e} />
+                                          </div>
+                                        ))
+                                    : <TextWithTooltips text={formatEntry(entry)} />}
+                                  
+                                  {/* Show choice UI if entry has choices */}
+                                  {hasChoice && (
+                                    <div className="mt-3 pt-3 border-t border-amber-200">
+                                      <label className="block text-xs font-medium text-slate-700 mb-2">
+                                        Chọn {entry.choose.count} {entry.choose.count === 1 ? "lựa chọn" : "lựa chọn"}:
+                                      </label>
+                                      {Array.isArray(entry.choose.from) ? (
+                                        <div className="space-y-2">
+                                          {entry.choose.from.map((option: any, optIdx: number) => {
+                                            const optionName = typeof option === "string" ? option : option.name || option;
+                                            const optionValue = typeof option === "string" ? option : option.name || option;
+                                            const isSelected = Array.isArray(currentChoice) 
+                                              ? currentChoice.includes(optionValue)
+                                              : currentChoice === optionValue;
+                                            
+                                            return (
+                                              <label key={optIdx} className="flex items-center gap-2 cursor-pointer">
+                                                <input
+                                                  type={entry.choose.count === 1 ? "radio" : "checkbox"}
+                                                  name={choiceKey}
+                                                  checked={isSelected}
+                                                  onChange={() => {
+                                                    if (!onSelectSubclassChoices) return;
+                                                    
+                                                    const newChoices = { ...subclassChoices };
+                                                    
+                                                    if (entry.choose.count === 1) {
+                                                      // Single choice (radio)
+                                                      newChoices[choiceKey] = optionValue;
+                                                    } else {
+                                                      // Multiple choices (checkbox)
+                                                      const currentArray = Array.isArray(currentChoice) ? currentChoice : currentChoice ? [currentChoice] : [];
+                                                      const index = currentArray.indexOf(optionValue);
+                                                      
+                                                      if (index > -1) {
+                                                        currentArray.splice(index, 1);
+                                                      } else if (currentArray.length < entry.choose.count) {
+                                                        currentArray.push(optionValue);
+                                                      }
+                                                      
+                                                      newChoices[choiceKey] = currentArray;
+                                                    }
+                                                    
+                                                    onSelectSubclassChoices(newChoices);
+                                                  }}
+                                                  className="accent-amber-600"
+                                                />
+                                                <span className="text-slate-700">{optionName}</span>
+                                              </label>
+                                            );
+                                          })}
+                                          {currentChoice && (
+                                            <div className="text-xs text-amber-700 mt-2">
+                                              Đã chọn: {Array.isArray(currentChoice) ? currentChoice.join(", ") : currentChoice}
+                                            </div>
+                                          )}
+                                        </div>
+                                      ) : (
+                                        <div className="text-xs text-slate-500">
+                                          Không có lựa chọn khả dụng
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                        
+                        {/* Show features data with entries and choices */}
+                        {subclassFeaturesData.length > 0 && subclassFeaturesData.map((feature: any, idx: number) => {
+                          if (!feature || !feature.entries) return null;
+                          
+                          console.log(`[Step2Class] Rendering feature: ${feature.name}`, feature);
+                          
+                          // Check if feature has a table with choices (like Dragon Ancestor)
+                          const hasTable = feature.entries.some((e: any) => e.type === "table" && e.caption && e.caption.includes("Draconic Ancestry"));
+                          const choiceKey = `Dragon Ancestor_${feature.name}`;
+                          const currentChoice = subclassChoices[choiceKey];
+                          
+                          // Dragon types from the table
+                          const dragonTypes = hasTable ? [
+                            "Black", "Blue", "Brass", "Bronze", "Copper", 
+                            "Gold", "Green", "Red", "Silver", "White"
+                          ] : null;
+                          
+                          return (
+                            <div key={idx} className="rounded-lg bg-white/50 p-3">
+                              <div className="font-medium text-slate-700 mb-2">
+                                {feature.name}
+                              </div>
+                              <div className="text-slate-600 space-y-2">
+                                {/* Render all entries */}
+                                {feature.entries.map((entry: any, entryIdx: number) => {
+                                  if (typeof entry === "string") {
+                                    return (
+                                      <div key={entryIdx}>
+                                        <TextWithTooltips text={entry} />
                                       </div>
-                                    ))
-                                : <TextWithTooltips text={formatEntry(entry)} />}
+                                    );
+                                  } else if (entry && typeof entry === "object") {
+                                    // Skip table for now, we'll add choice UI below
+                                    if (entry.type === "table") {
+                                      return null; // Skip table rendering, we'll show choice UI instead
+                                    }
+                                    // Render other entry types
+                                    if (entry.entries && Array.isArray(entry.entries)) {
+                                      return entry.entries
+                                        .filter((e: any) => typeof e === "string")
+                                        .map((e: string, i: number) => (
+                                          <div key={`${entryIdx}_${i}`}>
+                                            <TextWithTooltips text={e} />
+                                          </div>
+                                        ));
+                                    }
+                                  }
+                                  return null;
+                                })}
+                                
+                                {/* Show dragon type choice if this is Dragon Ancestor feature */}
+                                {hasTable && dragonTypes && (
+                                  <div className="mt-3 pt-3 border-t border-amber-200">
+                                    <label className="block text-xs font-medium text-slate-700 mb-2">
+                                      Chọn loại rồng (Dragon Ancestor):
+                                    </label>
+                                    <div className="space-y-2">
+                                      {dragonTypes.map((dragonType: string) => {
+                                        const isSelected = currentChoice === dragonType;
+                                        
+                                        return (
+                                          <label key={dragonType} className="flex items-center gap-2 cursor-pointer">
+                                            <input
+                                              type="radio"
+                                              name={choiceKey}
+                                              checked={isSelected}
+                                              onChange={() => {
+                                                if (!onSelectSubclassChoices) return;
+                                                const newChoices = { ...subclassChoices };
+                                                newChoices[choiceKey] = dragonType;
+                                                onSelectSubclassChoices(newChoices);
+                                              }}
+                                              className="accent-amber-600"
+                                            />
+                                            <span className="text-slate-700">{dragonType}</span>
+                                          </label>
+                                        );
+                                      })}
+                                      {currentChoice && (
+                                        <div className="text-xs text-amber-700 mt-2">
+                                          Đã chọn: {currentChoice}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                                
+                                {/* Show choice UI if entry has choices */}
+                                {feature.choose && feature.choose.from && feature.choose.count && (
+                                  <div className="mt-3 pt-3 border-t border-amber-200">
+                                    <label className="block text-xs font-medium text-slate-700 mb-2">
+                                      Chọn {feature.choose.count} {feature.choose.count === 1 ? "lựa chọn" : "lựa chọn"}:
+                                    </label>
+                                    {Array.isArray(feature.choose.from) ? (
+                                      <div className="space-y-2">
+                                        {feature.choose.from.map((option: any, optIdx: number) => {
+                                          const optionName = typeof option === "string" ? option : option.name || option;
+                                          const optionValue = typeof option === "string" ? option : option.name || option;
+                                          const isSelected = Array.isArray(currentChoice) 
+                                            ? currentChoice.includes(optionValue)
+                                            : currentChoice === optionValue;
+                                          
+                                          return (
+                                            <label key={optIdx} className="flex items-center gap-2 cursor-pointer">
+                                              <input
+                                                type={feature.choose.count === 1 ? "radio" : "checkbox"}
+                                                name={choiceKey}
+                                                checked={isSelected}
+                                                onChange={() => {
+                                                  if (!onSelectSubclassChoices) return;
+                                                  
+                                                  const newChoices = { ...subclassChoices };
+                                                  
+                                                  if (feature.choose.count === 1) {
+                                                    newChoices[choiceKey] = optionValue;
+                                                  } else {
+                                                    const currentArray = Array.isArray(currentChoice) ? currentChoice : currentChoice ? [currentChoice] : [];
+                                                    const index = currentArray.indexOf(optionValue);
+                                                    
+                                                    if (index > -1) {
+                                                      currentArray.splice(index, 1);
+                                                    } else if (currentArray.length < feature.choose.count) {
+                                                      currentArray.push(optionValue);
+                                                    }
+                                                    
+                                                    newChoices[choiceKey] = currentArray;
+                                                  }
+                                                  
+                                                  onSelectSubclassChoices(newChoices);
+                                                }}
+                                                className="accent-amber-600"
+                                              />
+                                              <span className="text-slate-700">{optionName}</span>
+                                            </label>
+                                          );
+                                        })}
+                                        {currentChoice && (
+                                          <div className="text-xs text-amber-700 mt-2">
+                                            Đã chọn: {Array.isArray(currentChoice) ? currentChoice.join(", ") : currentChoice}
+                                          </div>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <div className="text-xs text-slate-500">
+                                        Không có lựa chọn khả dụng
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
                             </div>
-                        </div>
-                      ))}
+                          );
+                        })}
+                      </>
+                    )}
                   </div>
                 )}
               </div>

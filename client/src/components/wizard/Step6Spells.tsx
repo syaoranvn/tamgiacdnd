@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import type { Character, Class } from "../../types";
+import type { Character, Class, Race } from "../../types";
 import TextWithTooltips from "../TextWithTooltips";
 import Tooltip from "../Tooltip";
 import TooltipContent from "../TooltipContent";
@@ -68,9 +68,21 @@ export default function Step9Spells({
   const [mouseDownTime, setMouseDownTime] = useState<number>(0);
   const [mouseDownSpell, setMouseDownSpell] = useState<string | null>(null);
   const longPressTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [raceData, setRaceData] = useState<Race | null>(null);
+  const [subraceData, setSubraceData] = useState<any>(null);
 
   // Spellcasting classes
   const spellcastingClasses = ["Wizard", "Sorcerer", "Warlock", "Cleric", "Druid", "Bard", "Ranger", "Paladin"];
+
+  // Load race data to get racial spells
+  useEffect(() => {
+    if (character.race) {
+      loadRaceData(character.race);
+    }
+    if (character.subrace) {
+      loadSubraceData(character.subrace);
+    }
+  }, [character.race, character.subrace]);
 
   useEffect(() => {
     if (character.className && spellcastingClasses.includes(character.className)) {
@@ -79,10 +91,170 @@ export default function Step9Spells({
     }
   }, [character.className, character.level]);
 
+  // Auto-add race spells to character.spells
+  useEffect(() => {
+    if (raceData || subraceData) {
+      const raceSpells = parseRaceSpells(raceData, subraceData, character.level || 1);
+      if (raceSpells && Object.keys(raceSpells).length > 0) {
+        // Merge race spells with existing spells
+        const mergedSpells = {
+          ...selectedSpells,
+          ...Object.keys(raceSpells).reduce((acc, key) => {
+            const existing = selectedSpells[key as keyof typeof selectedSpells] || [];
+            const race = raceSpells[key as keyof typeof raceSpells] || [];
+            // Merge and remove duplicates
+            acc[key] = [...new Set([...existing, ...race])];
+            return acc;
+          }, {} as typeof selectedSpells),
+        };
+        setSelectedSpells(mergedSpells);
+      }
+    }
+  }, [raceData, subraceData, character.level]);
+
   useEffect(() => {
     // Update character spells when selectedSpells changes
     onUpdate({ spells: selectedSpells });
   }, [selectedSpells]);
+
+  const loadRaceData = async (raceName: string) => {
+    try {
+      const response = await fetch(apiUrl(`api/data/races/${encodeURIComponent(raceName)}`));
+      if (response.ok) {
+        const data = await response.json();
+        setRaceData(data);
+      }
+    } catch (error) {
+      console.error("Error loading race data:", error);
+    }
+  };
+
+  const loadSubraceData = async (subraceName: string) => {
+    try {
+      const response = await fetch(apiUrl(`api/data/subraces/${encodeURIComponent(subraceName)}`));
+      if (response.ok) {
+        const data = await response.json();
+        setSubraceData(data);
+      }
+    } catch (error) {
+      console.error("Error loading subrace data:", error);
+    }
+  };
+
+  // Parse race additionalSpells and add to character.spells
+  const parseRaceSpells = (race: Race | null, subrace: any, characterLevel: number) => {
+    const spells: {
+      cantrips?: string[];
+      level1?: string[];
+      level2?: string[];
+      level3?: string[];
+      level4?: string[];
+      level5?: string[];
+      level6?: string[];
+      level7?: string[];
+      level8?: string[];
+      level9?: string[];
+    } = {};
+
+    const processAdditionalSpells = (additionalSpells: any[]) => {
+      if (!additionalSpells || !Array.isArray(additionalSpells)) return;
+
+      additionalSpells.forEach((spellData: any) => {
+        // Known spells (cantrips and regular spells)
+        if (spellData.known) {
+          Object.keys(spellData.known).forEach((level) => {
+            const levelSpells = spellData.known[level];
+            if (Array.isArray(levelSpells)) {
+              levelSpells.forEach((s: string) => {
+                const spellName = s.split("#")[0].split("|")[0].trim();
+                if (s.includes("#c") || level === "1" || level === "_") {
+                  // Cantrip
+                  if (!spells.cantrips) spells.cantrips = [];
+                  if (!spells.cantrips.includes(spellName)) {
+                    spells.cantrips.push(spellName);
+                  }
+                } else {
+                  // Regular spell
+                  const spellLevel = parseInt(level);
+                  if (spellLevel >= 1 && spellLevel <= 9) {
+                    const levelKey = `level${spellLevel}` as keyof typeof spells;
+                    if (!spells[levelKey]) spells[levelKey] = [];
+                    if (!spells[levelKey]!.includes(spellName)) {
+                      spells[levelKey]!.push(spellName);
+                    }
+                  }
+                }
+              });
+            } else if (typeof levelSpells === "string") {
+              const spellName = levelSpells.split("#")[0].split("|")[0].trim();
+              const spellLevel = parseInt(level);
+              if (spellLevel >= 1 && spellLevel <= 9) {
+                const levelKey = `level${spellLevel}` as keyof typeof spells;
+                if (!spells[levelKey]) spells[levelKey] = [];
+                if (!spells[levelKey]!.includes(spellName)) {
+                  spells[levelKey]!.push(spellName);
+                }
+              }
+            }
+          });
+        }
+
+        // Innate spells (available at certain character levels)
+        if (spellData.innate) {
+          Object.keys(spellData.innate).forEach((charLevel) => {
+            const charLevelNum = parseInt(charLevel);
+            if (charLevelNum <= characterLevel) {
+              const levelData = spellData.innate[charLevel];
+              if (typeof levelData === "string") {
+                const spellName = levelData.split("#")[0].split("|")[0].trim();
+                // Assume it's a level 1 spell if not specified
+                if (!spells.level1) spells.level1 = [];
+                if (!spells.level1.includes(spellName)) {
+                  spells.level1.push(spellName);
+                }
+              } else if (levelData.daily) {
+                Object.keys(levelData.daily).forEach((spellLevel) => {
+                  const dailySpells = levelData.daily[spellLevel];
+                  if (Array.isArray(dailySpells)) {
+                    dailySpells.forEach((s: string) => {
+                      const spellName = s.split("#")[0].split("|")[0].trim();
+                      const spellLevelNum = parseInt(spellLevel);
+                      if (spellLevelNum >= 1 && spellLevelNum <= 9) {
+                        const levelKey = `level${spellLevelNum}` as keyof typeof spells;
+                        if (!spells[levelKey]) spells[levelKey] = [];
+                        if (!spells[levelKey]!.includes(spellName)) {
+                          spells[levelKey]!.push(spellName);
+                        }
+                      }
+                    });
+                  } else if (typeof dailySpells === "string") {
+                    const spellName = dailySpells.split("#")[0].split("|")[0].trim();
+                    const spellLevelNum = parseInt(spellLevel);
+                    if (spellLevelNum >= 1 && spellLevelNum <= 9) {
+                      const levelKey = `level${spellLevelNum}` as keyof typeof spells;
+                      if (!spells[levelKey]) spells[levelKey] = [];
+                      if (!spells[levelKey]!.includes(spellName)) {
+                        spells[levelKey]!.push(spellName);
+                      }
+                    }
+                  }
+                });
+              }
+            }
+          });
+        }
+      });
+    };
+
+    if (race?.additionalSpells) {
+      processAdditionalSpells(race.additionalSpells);
+    }
+    if (subrace?.additionalSpells) {
+      processAdditionalSpells(subrace.additionalSpells);
+    }
+
+    return spells;
+  };
 
   const loadClassData = async (className: string) => {
     try {
@@ -592,13 +764,16 @@ export default function Step9Spells({
     });
   };
 
-  // Check if class is a spellcaster
-  if (!character.className || !spellcastingClasses.includes(character.className)) {
+  // Check if class is a spellcaster or if race/subrace provides spells
+  const hasRaceSpells = raceData?.additionalSpells || subraceData?.additionalSpells;
+  const isSpellcaster = character.className && spellcastingClasses.includes(character.className);
+  
+  if (!isSpellcaster && !hasRaceSpells) {
     return (
       <div>
         <h2 className="mb-4 font-display text-2xl text-ink">Bước 6: Chọn phép thuật</h2>
         <p className="mb-6 text-slate-600">
-          Lớp {character.className} không phải là lớp sử dụng phép thuật. Bạn có thể bỏ qua bước này.
+          Lớp {character.className} không phải là lớp sử dụng phép thuật và chủng tộc của bạn không cung cấp phép thuật. Bạn có thể bỏ qua bước này.
         </p>
       </div>
     );

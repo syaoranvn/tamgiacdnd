@@ -455,6 +455,394 @@ app.delete("/api/characters/:id", (req, res) => {
   res.status(204).send();
 });
 
+// Import character from external file
+const multer = require("multer");
+const upload = multer({ storage: multer.memoryStorage() });
+
+app.post("/api/characters/import", upload.single("file"), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "Không có file được upload" });
+    }
+
+    const file = req.file;
+    const isJson = file.mimetype === "application/json" || file.originalname.endsWith(".json");
+    const isPdf = file.mimetype === "application/pdf" || file.originalname.endsWith(".pdf");
+
+    if (!isJson && !isPdf) {
+      return res.status(400).json({ error: "Chỉ hỗ trợ file JSON hoặc PDF" });
+    }
+
+    let characterData;
+
+    if (isJson) {
+      // Parse JSON file
+      try {
+        const jsonContent = file.buffer.toString("utf8");
+        characterData = JSON.parse(jsonContent);
+      } catch (parseError) {
+        return res.status(400).json({ error: "File JSON không hợp lệ: " + parseError.message });
+      }
+    } else {
+      // PDF import - parse PDF form fields
+      try {
+        const { PDFDocument } = require("pdf-lib");
+        const pdfDoc = await PDFDocument.load(file.buffer);
+        const form = pdfDoc.getForm();
+        const fields = form.getFields();
+        
+        // Extract all field values (case-insensitive lookup)
+        const fieldValues = {};
+        const fieldNamesMap = {}; // Map lowercase -> actual field name
+        
+        fields.forEach((field) => {
+          const fieldName = field.getName();
+          const fieldNameLower = fieldName.toLowerCase().trim();
+          fieldNamesMap[fieldNameLower] = fieldName; // Store original case
+          
+          try {
+            if (field.constructor.name === "PDFTextField") {
+              const value = field.getText();
+              if (value && value.trim()) {
+                fieldValues[fieldName] = value;
+                // Also store with lowercase key for easier lookup
+                fieldValues[fieldNameLower] = value;
+              }
+            } else if (field.constructor.name === "PDFCheckBox") {
+              fieldValues[fieldName] = field.isChecked();
+              fieldValues[fieldNameLower] = field.isChecked();
+            } else if (field.constructor.name === "PDFDropdown" || field.constructor.name === "PDFRadioGroup") {
+              try {
+                const selected = field.getSelected();
+                fieldValues[fieldName] = selected;
+                fieldValues[fieldNameLower] = selected;
+              } catch (e) {
+                // Dropdown might not have selection
+              }
+            }
+          } catch (e) {
+            // Skip fields that can't be read
+            console.log(`[PDF Import] Skipping field ${fieldName}: ${e.message}`);
+          }
+        });
+        
+        console.log(`[PDF Import] Found ${Object.keys(fieldValues).length} field values in PDF`);
+        console.log(`[PDF Import] Total fields: ${fields.length}`);
+        console.log(`[PDF Import] Sample field names:`, Array.from(new Set(Object.keys(fieldNamesMap))).slice(0, 20));
+        
+        // Helper to get field value (try exact, then lowercase, then with trailing space)
+        const getFieldValue = (name) => {
+          return fieldValues[name] || 
+                 fieldValues[name.toLowerCase()] || 
+                 fieldValues[name + " "] ||
+                 fieldValues[(name + " ").toLowerCase()] ||
+                 "";
+        };
+        
+        const charName = getFieldValue("CharacterName") || getFieldValue("CharacterName 2");
+        const classLevel = getFieldValue("ClassLevel");
+        const race = getFieldValue("Race");
+        
+        console.log(`[PDF Import] CharacterName:`, charName);
+        console.log(`[PDF Import] ClassLevel:`, classLevel);
+        console.log(`[PDF Import] Race:`, race);
+        
+        // Convert PDF field values to character data (pass both fieldValues and getFieldValue helper)
+        characterData = convertPdfFieldsToCharacter(fieldValues, getFieldValue);
+        
+        console.log(`[PDF Import] Converted character data:`, {
+          name: characterData.name,
+          race: characterData.race,
+          className: characterData.className,
+          level: characterData.level
+        });
+      } catch (pdfError) {
+        console.error("[PDF Import] Error parsing PDF:", pdfError);
+        return res.status(400).json({ error: "Không thể đọc file PDF: " + pdfError.message });
+      }
+    }
+
+    // Convert external character format to internal format
+    // For PDF, characterData is already in our format, but we still need to normalize it
+    const convertedCharacter = convertExternalCharacter(characterData);
+
+    console.log(`[PDF Import] After convertExternalCharacter:`, {
+      name: convertedCharacter.name,
+      race: convertedCharacter.race,
+      className: convertedCharacter.className,
+      hasName: !!convertedCharacter.name,
+      hasRace: !!convertedCharacter.race,
+      hasClassName: !!convertedCharacter.className
+    });
+
+    // Validate required fields
+    if (!convertedCharacter.name || !convertedCharacter.race || !convertedCharacter.className) {
+      console.error("[PDF Import] Validation failed:", {
+        name: convertedCharacter.name || "MISSING",
+        race: convertedCharacter.race || "MISSING",
+        className: convertedCharacter.className || "MISSING"
+      });
+      return res.status(400).json({
+        error: `Thiếu thông tin bắt buộc. Tìm thấy: name="${convertedCharacter.name || ""}", race="${convertedCharacter.race || ""}", className="${convertedCharacter.className || ""}". Vui lòng kiểm tra file PDF có phải từ hệ thống này không.`,
+      });
+    }
+
+    // Create character
+    const character = {
+      id: uuidv4(),
+      createdAt: new Date().toISOString(),
+      ...convertedCharacter,
+    };
+
+    characters.push(character);
+    saveCharactersToFile();
+
+    res.status(201).json(character);
+  } catch (error) {
+    console.error("Error importing character:", error);
+    res.status(500).json({ error: "Không thể import nhân vật: " + error.message });
+  }
+});
+
+// Helper function to convert external character format to internal format
+function convertExternalCharacter(externalData) {
+  // If it's already in our format, return as-is (with some cleanup)
+  if (externalData.id && externalData.createdAt) {
+    // Remove id and timestamps to create new character
+    const { id, createdAt, updatedAt, ...rest } = externalData;
+    return rest;
+  }
+
+  // Try to map common external formats
+  const character = {
+    name: externalData.name || externalData.characterName || "Imported Character",
+    race: externalData.race || externalData.raceName || "",
+    subrace: externalData.subrace || externalData.subraceName,
+    className: externalData.className || externalData.class || externalData.className || "",
+    subclass: externalData.subclass || externalData.subclassName,
+    background: externalData.background || externalData.backgroundName || "",
+    alignment: externalData.alignment || "",
+    level: externalData.level || externalData.characterLevel || 1,
+    experiencePoints: externalData.experiencePoints || externalData.xp || 0,
+    abilityScores: externalData.abilityScores || {
+      str: externalData.strength || externalData.str || 10,
+      dex: externalData.dexterity || externalData.dex || 10,
+      con: externalData.constitution || externalData.con || 10,
+      int: externalData.intelligence || externalData.int || 10,
+      wis: externalData.wisdom || externalData.wis || 10,
+      cha: externalData.charisma || externalData.cha || 10,
+    },
+    proficiencies: externalData.proficiencies || externalData.proficiency || [],
+    equipment: externalData.equipment || externalData.equipmentList || [],
+    spells: externalData.spells || {},
+    ideals: externalData.ideals,
+    bonds: externalData.bonds,
+    flaws: externalData.flaws,
+    notes: externalData.notes || externalData.description,
+    // Preserve calculated stats if available
+    calculatedStats: externalData.calculatedStats,
+  };
+
+  // Map spell levels if they use different keys
+  if (character.spells && !character.spells.cantrips) {
+    const spellMapping = {
+      cantrips: ["cantrips", "cantrip", "0"],
+      level1: ["level1", "level_1", "1"],
+      level2: ["level2", "level_2", "2"],
+      level3: ["level3", "level_3", "3"],
+      level4: ["level4", "level_4", "4"],
+      level5: ["level5", "level_5", "5"],
+      level6: ["level6", "level_6", "6"],
+      level7: ["level7", "level_7", "7"],
+      level8: ["level8", "level_8", "8"],
+      level9: ["level9", "level_9", "9"],
+    };
+
+    const mappedSpells = {};
+    Object.entries(spellMapping).forEach(([targetKey, sourceKeys]) => {
+      for (const sourceKey of sourceKeys) {
+        if (character.spells[sourceKey]) {
+          mappedSpells[targetKey] = character.spells[sourceKey];
+          break;
+        }
+      }
+    });
+    if (Object.keys(mappedSpells).length > 0) {
+      character.spells = mappedSpells;
+    }
+  }
+
+  return character;
+}
+
+// Helper function to convert PDF form fields to character data
+function convertPdfFieldsToCharacter(fieldValues, getFieldValue) {
+  const character = {};
+  
+  // Helper function to get field value with multiple fallbacks
+  const getValue = (name) => {
+    if (getFieldValue) {
+      return getFieldValue(name);
+    }
+    // Fallback if getFieldValue not provided
+    return (fieldValues[name] || 
+            fieldValues[name.toLowerCase()] || 
+            fieldValues[name + " "] ||
+            fieldValues[(name + " ").toLowerCase()] ||
+            "").trim();
+  };
+  
+  // Basic information
+  character.name = getValue("CharacterName") || getValue("CharacterName 2");
+  
+  // Parse ClassLevel (format: "ClassName Level" or "ClassName  Level")
+  const classLevel = getValue("ClassLevel");
+  if (classLevel) {
+    const parts = classLevel.split(/\s+/);
+    if (parts.length >= 2) {
+      character.className = parts.slice(0, -1).join(" ");
+      character.level = parseInt(parts[parts.length - 1]) || 1;
+    } else {
+      character.className = classLevel;
+      character.level = 1;
+    }
+  }
+  
+  // Parse Race (format: "Race" or "Race (Subrace)")
+  const raceText = getValue("Race");
+  if (raceText) {
+    const match = raceText.match(/^(.+?)\s*\((.+?)\)$/);
+    if (match) {
+      character.race = match[1].trim();
+      character.subrace = match[2].trim();
+    } else {
+      character.race = raceText;
+    }
+  }
+  
+  character.background = getValue("Background");
+  character.alignment = getValue("Alignment");
+  character.experiencePoints = parseInt(getValue("XP") || "0") || 0;
+  
+  // Physical description
+  character.age = getValue("Age");
+  character.height = getValue("Height");
+  character.weight = getValue("Weight");
+  character.hair = getValue("Hair");
+  character.eyes = getValue("Eyes");
+  character.skin = getValue("Skin");
+  
+  // Ability scores
+  character.abilityScores = {
+    str: parseInt(getValue("STR") || "10") || 10,
+    dex: parseInt(getValue("DEX") || "10") || 10,
+    con: parseInt(getValue("CON") || "10") || 10,
+    int: parseInt(getValue("INT") || "10") || 10,
+    wis: parseInt(getValue("WIS") || "10") || 10,
+    cha: parseInt(getValue("CHA") || "10") || 10,
+  };
+  
+  // Equipment
+  const equipmentText = getValue("Equipment");
+  if (equipmentText) {
+    character.equipment = equipmentText.split("\n").filter(line => line.trim().length > 0);
+  } else {
+    character.equipment = [];
+  }
+  
+  // Spells - collect from spell fields
+  const spells = {
+    cantrips: [],
+    level1: [],
+    level2: [],
+    level3: [],
+    level4: [],
+    level5: [],
+    level6: [],
+    level7: [],
+    level8: [],
+    level9: [],
+  };
+  
+  // Spell field sequences (from export mapping)
+  const spellFieldSequences = {
+    0: [1014, 1016, 1017, 1018, 1019, 1020, 1021, 1022], // CANTRIPS
+    1: [1015, 1023, 1024, 1025, 1026, 1027, 1028, 1029, 1030, 1031, 1032, 1033], // Level 1
+    2: [1046, 1034, 1035, 1036, 1037, 1038, 1039, 1040, 1041, 1042, 1043, 1044, 1045], // Level 2
+    3: [1048, 1047, 1049, 1050, 1051, 1052, 1053, 1054, 1055, 1056, 1057, 1058, 1059], // Level 3
+    4: [1061, 1060, 1062, 1063, 1064, 1065, 1066, 1067, 1068, 1069, 1070, 1071, 1072], // Level 4
+    5: [1074, 1073, 1075, 1076, 1077, 1078, 1079, 1080, 1081], // Level 5
+    6: [1083, 1082, 1084, 1085, 1086, 1087, 1088, 1089, 1090], // Level 6
+    7: [1092, 1091, 1093, 1094, 1095, 1096, 1097, 1098, 1099], // Level 7
+    8: [10101, 10100, 10102, 10103, 10104, 10105, 10106], // Level 8
+    9: [10108, 10107, 10109], // Level 9
+  };
+  
+  Object.entries(spellFieldSequences).forEach(([levelStr, fieldNumbers]) => {
+    const level = parseInt(levelStr);
+    const levelKey = level === 0 ? "cantrips" : `level${level}`;
+    
+    fieldNumbers.forEach((fieldNum) => {
+      const spellName = getValue(`Spells ${fieldNum}`);
+      if (spellName && spellName.length > 0) {
+        if (!spells[levelKey].includes(spellName)) {
+          spells[levelKey].push(spellName);
+        }
+      }
+    });
+  });
+  
+  // Remove empty spell arrays
+  Object.keys(spells).forEach(key => {
+    if (spells[key].length === 0) {
+      delete spells[key];
+    }
+  });
+  
+  if (Object.keys(spells).length > 0) {
+    character.spells = spells;
+  }
+  
+  // Features and Traits
+  const featuresText = getValue("FeaturesandTraits") || getValue("Features and Traits") || getValue("Feat+Traits");
+  if (featuresText) {
+    // Store as notes for now (can be parsed later if needed)
+    character.notes = featuresText;
+  }
+  
+  // Proficiencies and Languages
+  const profsText = getValue("ProficienciesLang") || getValue("Proficiencies & Languages");
+  if (profsText) {
+    // Parse proficiencies (format: "Language: Common\nWeapon: Longsword\n...")
+    const proficiencies = [];
+    const lines = profsText.split("\n");
+    lines.forEach(line => {
+      const trimmed = line.trim();
+      if (trimmed) {
+        // Remove category prefix (e.g., "Language: ", "Weapon: ")
+        const match = trimmed.match(/^[^:]+:\s*(.+)$/);
+        if (match) {
+          proficiencies.push(match[1].trim());
+        } else {
+          proficiencies.push(trimmed);
+        }
+      }
+    });
+    if (proficiencies.length > 0) {
+      character.proficiencies = proficiencies;
+    }
+  }
+  
+  // Personality
+  character.ideals = getValue("Ideals");
+  character.bonds = getValue("Bonds");
+  character.flaws = getValue("Flaws");
+  character.personalityTraits = getValue("PersonalityTraits");
+  character.backstory = getValue("Backstory");
+  
+  return character;
+}
+
 // Export character sheet to PDF
 const { exportCharacterToPDF } = require("./pdfExport");
 
@@ -970,7 +1358,16 @@ app.get("/api/data/classes/:name", (req, res) => {
     return res.status(404).json({ error: "Class không tồn tại" });
   }
 
-  res.json(data.class[0]);
+  // Return class info with classFeature/subclassFeature arrays if available
+  const classInfo = data.class[0];
+  if (data.classFeature) {
+    classInfo.classFeature = data.classFeature;
+  }
+  if (data.subclassFeature) {
+    classInfo.subclassFeature = data.subclassFeature;
+  }
+
+  res.json(classInfo);
 });
 
 // Get subclasses for a specific class
@@ -1340,18 +1737,21 @@ app.get("/api/data/conditions/:name", (req, res) => {
 });
 
 // Generic lookup endpoint for any reference
-app.get("/api/data/lookup/:type/:name", (req, res) => {
+app.get("/api/data/lookup/:type/:name", async (req, res) => {
   const { type, name } = req.params;
   
   try {
     switch (type) {
       case "spell":
-        const searchName = name.toLowerCase();
+        const decodedSpellName = decodeURIComponent(name);
+        const searchName = decodedSpellName.toLowerCase().trim();
+        
         // Use index for O(1) lookup
         if (dataIndexes.spells) {
           const spell = dataIndexes.spells.get(searchName);
           if (spell) return res.json(spell);
         }
+        
         // Fallback to cache if index not available
         const spellsData = dataCache["spells/spells-phb.json"] || loadData("spells/spells-phb.json");
         if (spellsData?.spell) {
